@@ -9,7 +9,7 @@
 </head>
 <body>
 <div id="phone"><div id="screen">
-<div class="hud"><span>第 <b id="lvl">1</b> 关</span><span>分数 <b id="score">0</b></span><span id="birdsLeft" style="color:#d9453a">●●●</span></div>
+<div class="hud"><span>第 <b id="lvl">1</b> 关 <small id="lvlName"></small></span><span>分数 <b id="score">0</b></span><span id="birdsLeft" style="color:#d9453a">●●●</span></div>
 <div class="stage" id="stage"><canvas id="cv"></canvas><div class="hint" id="hint">按住小鸟往后拉,松手发射 · 打倒所有绿猪</div></div>
 <div class="softkeys"><button id="btnRestart">重玩本关</button><button id="btnSelect">选关</button><button data-go="../index.html">返回</button></div>
 <div class="overlay" id="overlay" hidden></div>
@@ -17,93 +17,120 @@
 <script src="../common/matter.min.js"></script>
 <script src="../common/shell.js"></script>
 <script>
+/* ===== 物理规则 + 关卡(无 DOM,可被 tools/test-birds.mjs 在 Node 里加载检验) ===== */
+/*BIRDS-ENGINE-START*/
+const W0=460,H0=390,GROUND=350;
+const SLING={x:95,y:305},REST={x:95,y:258},PULL=62,POWER=0.2;
+const MAT={wood:{fill:'#c98b4a',line:'#6f4218',hp:9,density:0.0015},glass:{fill:'rgba(170,225,255,.8)',line:'#3f86b0',hp:5,density:0.001},stone:{fill:'#9aa3ad',line:'#3f474f',hp:20,density:0.0035}};
+/* 关卡:blocks [x,y,w,h,材质](中心坐标,地面 y=350),pigs [x,y] */
+const LEVELS=[
+ {name:'小桥',birds:3,blocks:[[330,320,12,60,'wood'],[390,320,12,60,'wood'],[360,284,84,12,'wood']],pigs:[[360,336],[360,264]]},
+ {name:'玻璃楼',birds:3,blocks:[[350,325,12,50,'glass'],[410,325,12,50,'glass'],[380,294,84,12,'glass'],[350,268,12,40,'glass'],[410,268,12,40,'glass'],[380,242,84,12,'glass']],pigs:[[380,336],[380,276],[380,226]]},
+ {name:'石基',birds:4,blocks:[[380,338,100,24,'stone'],[350,300,12,52,'wood'],[410,300,12,52,'wood'],[380,268,76,12,'wood'],[380,244,30,36,'glass']],pigs:[[295,336],[380,212],[448,336]]},
+ {name:'双塔',birds:5,blocks:[[296,320,12,60,'wood'],[340,320,12,60,'wood'],[318,284,60,12,'wood'],[318,262,24,32,'glass'],[396,322,12,56,'glass'],[444,322,12,56,'glass'],[420,288,64,12,'wood'],[420,266,28,32,'wood']],pigs:[[318,336],[420,336],[420,236]]},
+ {name:'金字塔',birds:4,blocks:[[330,338,40,24,'stone'],[374,338,40,24,'stone'],[418,338,40,24,'stone'],[352,314,40,24,'wood'],[396,314,40,24,'wood'],[374,290,40,24,'glass'],[374,266,14,24,'wood']],pigs:[[286,336],[374,246],[452,336]]},
+ {name:'高塔',birds:3,blocks:[[330,320,12,60,'wood'],[370,320,12,60,'wood'],[350,284,52,12,'wood'],[330,258,12,40,'wood'],[370,258,12,40,'wood'],[350,232,52,12,'wood'],[350,214,24,24,'glass']],pigs:[[350,336],[350,270],[350,188]]},
+ {name:'石屋',birds:4,blocks:[[300,322,14,56,'stone'],[360,322,14,56,'stone'],[330,288,80,12,'stone'],[300,262,12,40,'wood'],[360,262,12,40,'wood'],[330,236,80,12,'wood']],pigs:[[330,336],[330,268],[330,216]]},
+ {name:'三连排',birds:5,blocks:[[258,326,12,48,'wood'],[302,326,12,48,'wood'],[280,296,60,12,'wood'],[328,326,12,48,'glass'],[372,326,12,48,'glass'],[350,296,60,12,'glass'],[398,326,12,48,'wood'],[442,326,12,48,'wood'],[420,296,60,12,'stone']],pigs:[[280,336],[350,336],[420,336]]},
+ {name:'悬空',birds:4,blocks:[[300,336,28,28,'wood'],[360,326,20,48,'glass'],[430,310,24,80,'glass']],pigs:[[300,308],[360,288],[430,256]]},
+ {name:'城堡',birds:4,blocks:[[310,338,60,24,'stone'],[380,338,60,24,'stone'],[345,314,60,24,'wood'],[345,290,24,24,'glass']],pigs:[[345,264],[266,336],[430,336]]},
+ {name:'玻璃塔',birds:4,blocks:[[336,325,14,50,'glass'],[384,325,14,50,'glass'],[360,294,64,12,'glass'],[336,268,14,40,'glass'],[384,268,14,40,'glass'],[360,242,64,12,'glass'],[336,218,14,36,'glass'],[384,218,14,36,'glass'],[360,194,64,12,'glass']],pigs:[[360,336],[360,274],[360,222],[360,174]]},
+ {name:'石墙',birds:4,blocks:[[280,300,16,100,'stone'],[350,326,12,48,'wood'],[400,326,12,48,'wood'],[375,296,64,12,'wood']],pigs:[[375,336],[375,276],[280,236]]},
+ {name:'摇摇欲坠',birds:3,blocks:[[320,310,12,80,'glass'],[360,310,12,80,'glass'],[340,264,60,12,'stone'],[420,326,20,48,'glass']],pigs:[[340,244],[340,336],[420,288]]},
+ {name:'地堡',birds:5,blocks:[[360,338,80,24,'stone'],[330,306,14,40,'stone'],[390,306,14,40,'stone'],[360,280,80,12,'stone'],[440,320,20,60,'wood']],pigs:[[360,312],[360,260],[440,276]]},
+ {name:'终极',birds:6,blocks:[[268,326,12,48,'glass'],[312,326,12,48,'glass'],[290,296,56,12,'glass'],[345,310,14,80,'stone'],[375,310,14,80,'stone'],[360,264,48,12,'stone'],[408,320,12,60,'wood'],[452,320,12,60,'wood'],[430,284,56,12,'wood']],pigs:[[290,336],[360,244],[430,336],[430,264]]}
+];
+const BirdsSim=(function(){
+  const {Engine,Bodies,Body,Composite,Events,Vector}=Matter;
+  function create(){
+    const engine=Engine.create();engine.gravity.y=1;
+    const st={engine:engine,world:engine.world,pigs:0,score:0,onDestroy:null};
+    Events.on(engine,'collisionStart',ev=>{for(const pr of ev.pairs){const a=pr.bodyA,b=pr.bodyB;const rel=Vector.magnitude(Vector.sub(a.velocity,b.velocity));if(rel<1.6)continue;hit(st,a,rel,b);hit(st,b,rel,a);}});
+    return st;
+  }
+  function loadLevel(st,L){
+    Composite.clear(st.world,false);st.score=0;st.pigs=0;
+    Composite.add(st.world,[
+      Bodies.rectangle(W0/2,GROUND+40,W0*3,80,{isStatic:true,label:'ground',friction:0.8}),
+      Bodies.rectangle(-40,H0/2,80,H0*4,{isStatic:true,label:'wall'}),
+      Bodies.rectangle(W0+40,H0/2,80,H0*4,{isStatic:true,label:'wall'})
+    ]);
+    for(const b of L.blocks){const m=MAT[b[4]];const body=Bodies.rectangle(b[0],b[1],b[2],b[3],{density:m.density,friction:0.6,restitution:0.05,label:'block'});body.mat=b[4];body.hp=m.hp;body.hp0=m.hp;Composite.add(st.world,body);}
+    for(const p of L.pigs){const body=Bodies.circle(p[0],p[1],14,{density:0.001,friction:0.6,restitution:0.2,label:'pig'});body.hp=6;body.hp0=6;Composite.add(st.world,body);st.pigs++;}
+  }
+  function hit(st,body,rel,other){
+    if(body.hp==null||body.dead)return;
+    const k=other.label==='bird'?1.0:(other.label==='ground'||other.label==='wall'?0.45:0.7);
+    body.hp-=rel*k;if(body.hp<=0)destroy(st,body);
+  }
+  function destroy(st,body){
+    body.dead=true;Composite.remove(st.world,body);
+    if(body.label==='pig'){st.pigs--;st.score+=5000;}else st.score+=500;
+    if(st.onDestroy)st.onDestroy(body);
+  }
+  function makeBird(st){
+    // 不能在创建时就 isStatic:true,否则 setStatic(false) 会把质量恢复成无穷大,小鸟发不出去
+    const b=Bodies.circle(REST.x,REST.y,12,{density:0.004,restitution:0.45,friction:0.7,label:'bird'});
+    Body.setStatic(b,true);Composite.add(st.world,b);return b;
+  }
+  function launch(st,b,dx,dy){Body.setStatic(b,false);Body.setDensity(b,0.004);Body.setVelocity(b,{x:dx*POWER,y:dy*POWER});}
+  function step(st){Engine.update(st.engine,1000/60);}
+  function birdDone(b,flyT){const p=b.position;return !isFinite(p.x)||!isFinite(p.y)||(b.speed<0.25&&flyT>1.2)||p.y>H0+60||p.x>W0+40||p.x<-40||flyT>7;}
+  function remove(st,b){Composite.remove(st.world,b);}
+  function bodies(st){return Composite.allBodies(st.world);}
+  return {create:create,loadLevel:loadLevel,makeBird:makeBird,launch:launch,step:step,birdDone:birdDone,remove:remove,bodies:bodies};
+})();
+/*BIRDS-ENGINE-END*/
+
 (function(){
 'use strict';
-const {$,clamp,rand,store,fit,watchResize,pointerPos,dialog,closeDialog,bindNav,text,makeFx}=Shell;
-const {Engine,Bodies,Body,Composite,Events,Vector}=Matter;
+const {$,clamp,store,fit,watchResize,pointerPos,dialog,closeDialog,bindNav,makeFx}=Shell;
+const {Body}=Matter;
 bindNav();
 const cv=$('#cv'),g=cv.getContext('2d'),stage=$('#stage'),overlay=$('#overlay'),hint=$('#hint');
-const W0=460,H0=390,GROUND=350;
-const SLING={x:95,y:305},REST={x:95,y:258},PULL=62;
-const MAT={wood:{fill:'#c98b4a',line:'#6f4218',hp:9,density:0.0015},glass:{fill:'rgba(170,225,255,.8)',line:'#3f86b0',hp:5,density:0.001},stone:{fill:'#9aa3ad',line:'#3f474f',hp:20,density:0.0035}};
-/* 关卡:方块 [x,y,w,h,材质],猪 [x,y] (逻辑坐标,地面 y=350) */
-const LEVELS=[
- {birds:3,blocks:[[330,320,12,60,'wood'],[390,320,12,60,'wood'],[360,284,84,12,'wood']],pigs:[[360,336],[360,264]]},
- {birds:3,blocks:[[350,325,12,50,'glass'],[410,325,12,50,'glass'],[380,294,84,12,'glass'],[350,268,12,40,'glass'],[410,268,12,40,'glass'],[380,242,84,12,'glass']],pigs:[[380,336],[380,276],[380,226]]},
- {birds:4,blocks:[[380,338,100,24,'stone'],[350,300,12,52,'wood'],[410,300,12,52,'wood'],[380,268,76,12,'wood'],[380,244,30,36,'glass']],pigs:[[295,336],[380,254],[440,336]]},
- {birds:4,blocks:[[300,320,12,60,'wood'],[336,320,12,60,'wood'],[318,284,52,12,'wood'],[318,262,24,32,'glass'],[400,322,12,56,'glass'],[440,322,12,56,'glass'],[420,288,60,12,'stone'],[420,266,12,32,'wood']],pigs:[[318,336],[420,336],[420,244]]},
- {birds:4,blocks:[[330,338,40,24,'stone'],[374,338,40,24,'stone'],[418,338,40,24,'stone'],[352,314,40,24,'wood'],[396,314,40,24,'wood'],[374,290,40,24,'glass'],[374,266,14,24,'wood']],pigs:[[286,336],[374,246],[452,336]]}
-];
 const fx=makeFx();
 let W=0,H=0,dpr=1,sc=1,ox=0,oy=0;
-const engine=Engine.create();engine.gravity.y=1;const world=engine.world;
-const S={lvl:0,score:0,birdsLeft:0,bird:null,flying:false,flyT:0,drag:null,pigs:0,acc:0,over:false,modal:null,best:store.get('aigame.birds.best',{}),quiet:0};
+const sim=BirdsSim.create();
+const S={lvl:0,birdsLeft:0,bird:null,flying:false,flyT:0,drag:null,acc:0,over:false,modal:null};
 const prog=store.get('aigame.birds.prog',{done:{},cur:0});
+sim.onDestroy=body=>{const p=body.position;
+  if(body.label==='pig'){fx.pop('+5000',p.x,p.y-20,'#fff',16);fx.burst(p.x,p.y,'#7bd36b',14,90,3);}
+  else{fx.pop('+500',p.x,p.y-16,'#ffe8a0',12);fx.burst(p.x,p.y,MAT[body.mat].fill,10,70,3);}
+  hud();};
 function resize(){const f=fit(cv,stage);W=f.w;H=f.h;dpr=f.dpr;sc=Math.min(W/W0,H/H0);ox=(W-W0*sc)/2;oy=H-H0*sc;}
-function clearWorld(){Composite.clear(world,false);}
 function load(n){
   n=clamp(n,0,LEVELS.length-1);S.lvl=n;prog.cur=n;store.set('aigame.birds.prog',prog);
-  clearWorld();S.score=0;S.over=false;S.flying=false;S.drag=null;S.bird=null;S.modal=null;closeDialog(overlay);fx.clear();
-  const L=LEVELS[n];
-  Composite.add(world,[
-    Bodies.rectangle(W0/2,GROUND+40,W0*3,80,{isStatic:true,label:'ground',friction:0.8}),
-    Bodies.rectangle(-40,H0/2,80,H0*4,{isStatic:true,label:'wall'}),
-    Bodies.rectangle(W0+40,H0/2,80,H0*4,{isStatic:true,label:'wall'})
-  ]);
-  for(const b of L.blocks){const m=MAT[b[4]];const body=Bodies.rectangle(b[0],b[1],b[2],b[3],{density:m.density,friction:0.6,restitution:0.05,label:'block'});body.mat=b[4];body.hp=m.hp;body.hp0=m.hp;Composite.add(world,body);}
-  S.pigs=0;for(const p of L.pigs){const body=Bodies.circle(p[0],p[1],14,{density:0.001,friction:0.6,restitution:0.2,label:'pig'});body.hp=6;body.hp0=6;Composite.add(world,body);S.pigs++;}
-  S.birdsLeft=L.birds;loadBird();hud();
+  S.over=false;S.flying=false;S.drag=null;S.bird=null;S.modal=null;closeDialog(overlay);fx.clear();
+  BirdsSim.loadLevel(sim,LEVELS[n]);S.birdsLeft=LEVELS[n].birds;loadBird();hud();
 }
-function loadBird(){
-  if(S.birdsLeft<=0){S.bird=null;return;}
-  S.birdsLeft--;
-  // 注意:不能在创建时就 isStatic:true,否则 setStatic(false) 会把质量恢复成错的值,小鸟发不出去
-  const b=Bodies.circle(REST.x,REST.y,12,{density:0.004,restitution:0.45,friction:0.7,label:'bird'});
-  Body.setStatic(b,true);
-  S.bird=b;S.flying=false;S.flyT=0;Composite.add(world,b);hud();
-}
-function hud(){$('#lvl').textContent=S.lvl+1;$('#score').textContent=S.score;$('#birdsLeft').textContent='●'.repeat(S.birdsLeft+(S.bird&&!S.flying?1:0))||'○';}
-Events.on(engine,'collisionStart',ev=>{
-  for(const pr of ev.pairs){const a=pr.bodyA,b=pr.bodyB;const rel=Vector.magnitude(Vector.sub(a.velocity,b.velocity));if(rel<1.6)continue;hit(a,rel,b);hit(b,rel,a);}
-});
-function hit(body,rel,other){
-  if(body.hp==null||body.dead)return;
-  const k=other.label==='bird'?1.0:(other.label==='ground'||other.label==='wall'?0.45:0.7);
-  body.hp-=rel*k;if(body.hp<=0)destroy(body);
-}
-function destroy(body){
-  body.dead=true;Composite.remove(world,body);const p=body.position;
-  if(body.label==='pig'){S.pigs--;S.score+=5000;fx.pop('+5000',p.x,p.y-20,'#fff',16);fx.burst(p.x,p.y,'#7bd36b',14,90,3);}
-  else{S.score+=500;fx.pop('+500',p.x,p.y-16,'#ffe8a0',12);fx.burst(p.x,p.y,MAT[body.mat].fill,10,70,3);}
-  hud();
-}
+function loadBird(){if(S.birdsLeft<=0){S.bird=null;return;}S.birdsLeft--;S.bird=BirdsSim.makeBird(sim);S.flying=false;S.flyT=0;hud();}
+function hud(){$('#lvl').textContent=S.lvl+1;$('#lvlName').textContent=LEVELS[S.lvl].name;$('#score').textContent=sim.score;$('#birdsLeft').textContent='●'.repeat(S.birdsLeft+(S.bird&&!S.flying?1:0))||'○';}
 function update(dt){
   S.acc=Math.min(S.acc+dt,0.1);
-  while(S.acc>=1/60){Engine.update(engine,1000/60);S.acc-=1/60;}
+  while(S.acc>=1/60){BirdsSim.step(sim);S.acc-=1/60;}
   fx.update(dt,400);
   if(S.over)return;
   if(S.flying&&S.bird){
-    S.flyT+=dt;const b=S.bird;
-    const stopped=b.speed<0.25&&S.flyT>1.2;const out=!isFinite(b.position.x)||!isFinite(b.position.y)||b.position.y>H0+60||b.position.x>W0+40||b.position.x<-40;
-    if(stopped||out||S.flyT>7){Composite.remove(world,b);S.bird=null;S.flying=false;if(S.pigs>0){if(S.birdsLeft>0)loadBird();else{S.over=true;setTimeout(fail,400);}}}
+    S.flyT+=dt;
+    if(BirdsSim.birdDone(S.bird,S.flyT)){BirdsSim.remove(sim,S.bird);S.bird=null;S.flying=false;if(sim.pigs>0){if(S.birdsLeft>0)loadBird();else{S.over=true;setTimeout(fail,400);}}}
   }
-  if(S.pigs<=0&&!S.over){S.over=true;setTimeout(win,900);}
+  if(sim.pigs<=0&&!S.over){S.over=true;setTimeout(win,900);}
 }
 function win(){
-  const bonus=(S.birdsLeft+(S.bird&&!S.flying?1:0))*5000;S.score+=bonus;hud();
-  const prev=prog.done[S.lvl];if(prev==null||S.score>prev)prog.done[S.lvl]=S.score;store.set('aigame.birds.prog',prog);
+  const bonus=(S.birdsLeft+(S.bird&&!S.flying?1:0))*5000;sim.score+=bonus;hud();
+  const prev=prog.done[S.lvl];if(prev==null||sim.score>prev)prog.done[S.lvl]=sim.score;store.set('aigame.birds.prog',prog);
   const last=S.lvl>=LEVELS.length-1;const btns=[];
   if(!last)btns.push({label:'下一关',primary:true,onClick(){load(S.lvl+1);}});
   btns.push({label:'重玩',onClick(){load(S.lvl);}});btns.push({label:'选关',onClick(){selectDialog();}});
-  S.modal=()=>dialog(overlay,{title:last?'全部通关!':'第 '+(S.lvl+1)+' 关 通过!',lines:['得分 '+S.score+(bonus?' (剩余小鸟 +'+bonus+')':''),'本关最高 '+prog.done[S.lvl]],buttons:btns});S.modal();
+  S.modal=()=>dialog(overlay,{title:last?'全部通关!':'第 '+(S.lvl+1)+' 关 通过!',lines:['得分 '+sim.score+(bonus?' (剩余小鸟 +'+bonus+')':''),'本关最高 '+prog.done[S.lvl]],buttons:btns});S.modal();
 }
 function fail(){
-  S.modal=()=>dialog(overlay,{title:'小鸟用完了',lines:['还剩 '+S.pigs+' 只猪','得分 '+S.score],buttons:[{label:'再试一次',primary:true,onClick(){load(S.lvl);}},{label:'选关',onClick(){selectDialog();}}]});S.modal();
+  S.modal=()=>dialog(overlay,{title:'小鸟用完了',lines:['还剩 '+sim.pigs+' 只猪','得分 '+sim.score],buttons:[{label:'再试一次',primary:true,onClick(){load(S.lvl);}},{label:'选关',onClick(){selectDialog();}}]});S.modal();
 }
 function selectDialog(){
   S.modal=selectDialog;
   dialog(overlay,{title:'选择关卡',build(d){const grid=document.createElement('div');grid.className='lvgrid';
-    LEVELS.forEach((L,i)=>{const b=document.createElement('button');b.innerHTML=(i+1)+(prog.done[i]!=null?'<small>'+prog.done[i]+'</small>':'');if(prog.done[i]!=null)b.classList.add('done');if(i===S.lvl)b.classList.add('cur');b.addEventListener('click',()=>{closeDialog(overlay);load(i);});grid.appendChild(b);});
+    LEVELS.forEach((L,i)=>{const b=document.createElement('button');b.innerHTML=(i+1)+'<small>'+(prog.done[i]!=null?prog.done[i]:L.name)+'</small>';if(prog.done[i]!=null)b.classList.add('done');if(i===S.lvl)b.classList.add('cur');b.title=L.name;b.addEventListener('click',()=>{closeDialog(overlay);load(i);});grid.appendChild(b);});
     d.appendChild(grid);},buttons:[{label:'关闭',onClick(){S.modal=null;}}]});
 }
 /* 输入:拉弓 */
@@ -114,15 +141,12 @@ cv.addEventListener('pointerdown',e=>{
   if(Math.hypot(p.x-REST.x,p.y-REST.y)<70){S.drag={id:e.pointerId};try{cv.setPointerCapture(e.pointerId);}catch(err){}dragTo(p);}
 });
 cv.addEventListener('pointermove',e=>{if(!S.drag||!S.bird||S.flying)return;dragTo(toWorld(pointerPos(cv,e)));});
-function dragTo(p){
-  let dx=p.x-REST.x,dy=p.y-REST.y;const d=Math.hypot(dx,dy);if(d>PULL){dx*=PULL/d;dy*=PULL/d;}
-  Body.setPosition(S.bird,{x:REST.x+dx,y:REST.y+dy});
-}
+function dragTo(p){let dx=p.x-REST.x,dy=p.y-REST.y;const d=Math.hypot(dx,dy);if(d>PULL){dx*=PULL/d;dy*=PULL/d;}Body.setPosition(S.bird,{x:REST.x+dx,y:REST.y+dy});}
 function release(){
   if(!S.drag)return;S.drag=null;const b=S.bird;if(!b||S.flying)return;
   const dx=REST.x-b.position.x,dy=REST.y-b.position.y;
   if(Math.hypot(dx,dy)<8){Body.setPosition(b,REST);return;}
-  Body.setStatic(b,false);Body.setDensity(b,0.004);Body.setVelocity(b,{x:dx*0.2,y:dy*0.2});S.flying=true;S.flyT=0;hud();
+  BirdsSim.launch(sim,b,dx,dy);S.flying=true;S.flyT=0;hud();
 }
 cv.addEventListener('pointerup',release);cv.addEventListener('pointercancel',release);
 /* 绘制 */
@@ -130,17 +154,14 @@ function render(){
   g.setTransform(1,0,0,1,0,0);
   const sky=g.createLinearGradient(0,0,0,H);sky.addColorStop(0,'#5fb7ee');sky.addColorStop(1,'#cdeeff');g.fillStyle=sky;g.fillRect(0,0,W,H);
   g.setTransform(sc,0,0,sc,ox,oy);
-  // 云、远山
   g.fillStyle='rgba(255,255,255,.85)';for(const c of [[80,60,26],[120,70,20],[300,40,22],[340,50,16],[420,90,20]]){g.beginPath();g.arc(c[0],c[1],c[2],0,6.28);g.fill();}
   g.fillStyle='#8fcf7a';g.beginPath();g.moveTo(-100,GROUND);g.quadraticCurveTo(80,250,260,GROUND);g.quadraticCurveTo(420,270,640,GROUND);g.fill();
   g.fillStyle='#6db85a';g.fillRect(-100,GROUND,W0+200,6);g.fillStyle='#a97a44';g.fillRect(-100,GROUND+6,W0+200,H0);
-  // 弹弓
   g.lineCap='round';g.strokeStyle='#6b4423';g.lineWidth=7;g.beginPath();g.moveTo(SLING.x,SLING.y+45);g.lineTo(SLING.x,SLING.y-30);g.lineTo(SLING.x-10,SLING.y-52);g.moveTo(SLING.x,SLING.y-30);g.lineTo(SLING.x+10,SLING.y-52);g.stroke();
-  const bodies=Composite.allBodies(world);
   const b=S.bird;
   if(b&&!S.flying&&S.drag){g.strokeStyle='#3a2410';g.lineWidth=4;g.beginPath();g.moveTo(SLING.x-10,SLING.y-52);g.lineTo(b.position.x,b.position.y);g.lineTo(SLING.x+10,SLING.y-52);g.stroke();
-    const vx=(REST.x-b.position.x)*0.2,vy=(REST.y-b.position.y)*0.2;g.fillStyle='rgba(255,255,255,.7)';for(let t=4;t<=70;t+=6){const x=b.position.x+vx*t,y=b.position.y+vy*t+0.5*0.278*t*t;if(y>GROUND)break;g.beginPath();g.arc(x,y,2.2,0,6.28);g.fill();}}
-  for(const body of bodies){
+    const vx=(REST.x-b.position.x)*POWER,vy=(REST.y-b.position.y)*POWER;g.fillStyle='rgba(255,255,255,.7)';for(let t=4;t<=70;t+=6){const x=b.position.x+vx*t,y=b.position.y+vy*t+0.5*0.278*t*t;if(y>GROUND)break;g.beginPath();g.arc(x,y,2.2,0,6.28);g.fill();}}
+  for(const body of BirdsSim.bodies(sim)){
     if(body.isStatic&&body.label!=='bird')continue;
     g.save();g.translate(body.position.x,body.position.y);g.rotate(body.angle);
     if(body.label==='block'){const m=MAT[body.mat];const v=body.vertices;const w=Math.hypot(v[1].x-v[0].x,v[1].y-v[0].y),h=Math.hypot(v[2].x-v[1].x,v[2].y-v[1].y);
@@ -160,7 +181,6 @@ function render(){
     }
     g.restore();
   }
-  // 候场的小鸟
   for(let i=0;i<S.birdsLeft;i++){g.fillStyle='#e0322b';g.beginPath();g.arc(50-i*22,GROUND-10,9,0,6.28);g.fill();g.lineWidth=1.5;g.strokeStyle='#6b100c';g.stroke();}
   fx.draw(g,1);
 }
