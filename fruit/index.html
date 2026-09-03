@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#2b2926">
+<title>水果忍者</title>
+<link rel="stylesheet" href="../common/shell.css">
+</head>
+<body>
+<div id="phone"><div id="screen">
+<div class="hud"><span>分数 <b id="score">0</b></span><span class="lives" id="lives">♥♥♥</span><span>最高 <b id="best">0</b></span></div>
+<div class="stage" id="stage"><canvas id="cv"></canvas><div class="hint" id="hint">点一下开始 · 手指划过水果切开它 · 别切炸弹 · 漏掉 3 个就输</div></div>
+<div class="softkeys"><button id="btnPause">暂停</button><button id="btnRestart">重开</button><button data-go="../index.html">返回</button></div>
+<div class="overlay" id="overlay" hidden></div>
+</div></div>
+<script src="../common/shell.js"></script>
+<script>
+(function(){
+'use strict';
+const {$,clamp,rand,store,fit,watchResize,makeLoop,pointerPos,dialog,bindNav,text,makeFx}=Shell;
+bindNav();
+const cv=$('#cv'),g=cv.getContext('2d'),stage=$('#stage'),overlay=$('#overlay'),hint=$('#hint');
+const elScore=$('#score'),elLives=$('#lives'),elBest=$('#best');
+let W=0,H=0,dpr=1,bg=null;
+const FR=[
+ {skin:'#3f9a4a',rim:'#2b6b33',flesh:'#ff5a5a',juice:'#ff4b4b',seeds:true,r:1.0},
+ {skin:'#ff9a2e',rim:'#c96f14',flesh:'#ffd27a',juice:'#ffb340',r:0.8},
+ {skin:'#e63e3e',rim:'#a52323',flesh:'#fff2c9',juice:'#ffdf7a',r:0.75},
+ {skin:'#e9d95c',rim:'#b3a23a',flesh:'#fffbe0',juice:'#f5ec9a',r:0.8},
+ {skin:'#b8213b',rim:'#7d1327',flesh:'#ff3d5e',juice:'#ff3d5e',r:0.85},
+ {skin:'#8a6a3a',rim:'#5c4420',flesh:'#8fd15a',juice:'#a5e06a',r:0.7}
+];
+const fx=makeFx();
+const S={state:'ready',score:0,best:store.get('aigame.fruit.best',0),lives:3,fruits:[],halves:[],stains:[],trail:[],t:0,spawnT:1,comboN:0,comboT:0,shake:0,flash:0,modal:null,down:false,last:null};
+const base=()=>Math.min(W,H)*0.075;
+
+function resize(){const f=fit(cv,stage);W=f.w;H=f.h;dpr=f.dpr;bg=makeBg();}
+function makeBg(){
+  const c=document.createElement('canvas');c.width=W;c.height=H;const b=c.getContext('2d');
+  b.fillStyle='#8a5a2b';b.fillRect(0,0,W,H);
+  const ph=Math.max(40,H/7);
+  for(let y=0,k=0;y<H;y+=ph,k++){
+    b.fillStyle=(k%2)?'#7f5124':'#8f5d2c';b.fillRect(0,y,W,ph);
+    b.strokeStyle='rgba(0,0,0,.28)';b.lineWidth=2*dpr;b.beginPath();b.moveTo(0,y);b.lineTo(W,y);b.stroke();
+    b.strokeStyle='rgba(255,255,255,.07)';b.lineWidth=1.5*dpr;
+    for(let i=0;i<5;i++){const yy=y+ph*(0.15+i*0.18);b.beginPath();b.moveTo(0,yy);for(let x=0;x<=W;x+=W/12)b.lineTo(x,yy+Math.sin(x/W*6+i+k)*ph*0.05);b.stroke();}
+    b.fillStyle='rgba(0,0,0,.35)';const nx=(k%2)?W*0.2:W*0.75;b.beginPath();b.arc(nx,y+ph*0.5,3*dpr,0,6.28);b.fill();
+  }
+  return c;
+}
+function reset(){S.score=0;S.lives=3;S.fruits=[];S.halves=[];S.stains=[];S.trail=[];S.t=0;S.spawnT=0.5;S.comboN=0;S.comboT=0;S.shake=0;S.flash=0;fx.clear();hud();}
+function start(){reset();S.state='play';hint.hidden=true;}
+function hud(){elScore.textContent=S.score;elBest.textContent=Math.max(S.best,S.score);elLives.textContent='♥'.repeat(S.lives)+'♡'.repeat(Math.max(0,3-S.lives));}
+
+function spawnWave(){
+  const n=1+Math.floor(Math.random()*Math.min(4,1+S.score/12));
+  for(let i=0;i<n;i++){
+    const bomb=S.score>8&&Math.random()<0.1+Math.min(0.15,S.score/400);
+    const type=FR[Math.floor(Math.random()*FR.length)];
+    const r=base()*(bomb?0.8:type.r);
+    const x=rand(0.15,0.85)*W;
+    const hmax=rand(0.55,0.9)*H,G=H*1.5;
+    S.fruits.push({type,bomb,x,y:H+r,vx:(W/2-x)*0.5+rand(-0.12,0.12)*W,vy:-Math.sqrt(2*G*hmax),r,rot:rand(0,6.28),vrot:rand(-3,3),delay:i*0.13});
+  }
+}
+function update(dt){
+  if(S.state!=='play')return;
+  S.t+=dt;const G=H*1.5;
+  S.spawnT-=dt;if(S.spawnT<=0){spawnWave();S.spawnT=Math.max(0.55,1.4-S.score*0.01);}
+  for(const f of S.fruits){if(f.delay>0){f.delay-=dt;continue;}f.x+=f.vx*dt;f.y+=f.vy*dt;f.vy+=G*dt;f.rot+=f.vrot*dt;}
+  for(let i=S.fruits.length-1;i>=0;i--){const f=S.fruits[i];if(f.delay<=0&&f.y>H+f.r*2&&f.vy>0){S.fruits.splice(i,1);if(!f.bomb)miss(f);}}
+  for(const h of S.halves){h.x+=h.vx*dt;h.y+=h.vy*dt;h.vy+=G*dt;h.rot+=h.vrot*dt;}
+  for(let i=S.halves.length-1;i>=0;i--)if(S.halves[i].y>H+base()*3)S.halves.splice(i,1);
+  for(const s of S.stains)s.a-=dt*0.3;
+  for(let i=S.stains.length-1;i>=0;i--)if(S.stains[i].a<=0)S.stains.splice(i,1);
+  const now=performance.now();S.trail=S.trail.filter(p=>now-p.t<160);
+  if(S.comboN>0){S.comboT-=dt;if(S.comboT<=0){if(S.comboN>=3){const bonus=S.comboN*2;S.score+=bonus;fx.pop(S.comboN+' 连斩 +'+bonus,W/2,H*0.3,'#ffe066',26*dpr);hud();}S.comboN=0;}}
+  fx.update(dt,H*1.2);
+  if(S.shake>0)S.shake-=dt;if(S.flash>0)S.flash-=dt;
+}
+function miss(f){S.lives--;fx.pop('漏了',f.x,H*0.85,'#ff6b6b',20*dpr);hud();if(S.lives<=0)gameOver('水果掉光了');}
+function slice(f,ang){
+  const i=S.fruits.indexOf(f);if(i>=0)S.fruits.splice(i,1);
+  if(f.bomb){S.flash=0.5;S.shake=0.6;fx.burst(f.x,f.y,'#ffcc33',24,H*0.6,6*dpr);fx.burst(f.x,f.y,'#333',16,H*0.4,5*dpr);S.state='dying';setTimeout(()=>gameOver('切到炸弹了'),650);return;}
+  S.score++;S.comboN++;S.comboT=0.35;hud();
+  const t=f.type;const nx=Math.cos(ang+Math.PI/2),ny=Math.sin(ang+Math.PI/2);const sp=H*0.22;
+  for(const side of [-1,1])S.halves.push({type:t,x:f.x+nx*side*2,y:f.y+ny*side*2,vx:f.vx+nx*side*sp,vy:f.vy+ny*side*sp-H*0.12,r:f.r,rot:ang,vrot:side*rand(2,5),side});
+  S.stains.push({x:f.x,y:f.y,r:f.r*rand(1.2,1.8),c:t.juice,a:0.9,rot:rand(0,6.28)});
+  fx.burst(f.x,f.y,t.juice,10,H*0.5,4*dpr);
+  fx.pop('+1',f.x,f.y-f.r,'#fff',16*dpr);
+}
+function drawFruit(f){
+  g.save();g.translate(f.x,f.y);g.rotate(f.rot);const r=f.r;
+  if(f.bomb){
+    g.beginPath();g.arc(0,0,r,0,6.28);g.fillStyle='#23232a';g.fill();g.lineWidth=r*0.1;g.strokeStyle='#000';g.stroke();
+    g.beginPath();g.arc(-r*0.3,-r*0.3,r*0.35,0,6.28);g.fillStyle='rgba(255,255,255,.18)';g.fill();
+    g.lineWidth=r*0.12;g.strokeStyle='#c8a165';g.beginPath();g.moveTo(0,-r*0.9);g.quadraticCurveTo(r*0.4,-r*1.4,r*0.6,-r*1.2);g.stroke();
+    const sp=0.6+0.4*Math.sin(S.t*30);g.beginPath();g.arc(r*0.6,-r*1.2,r*0.22*sp,0,6.28);g.fillStyle='#ffd23f';g.fill();
+    text(g,'!',0,r*0.05,r*1.2,'#ff5555',null);
+  }else{
+    const t=f.type;
+    g.beginPath();g.arc(0,0,r,0,6.28);g.fillStyle=t.skin;g.fill();g.lineWidth=r*0.12;g.strokeStyle=t.rim;g.stroke();
+    if(t.seeds){g.strokeStyle=t.rim;g.lineWidth=r*0.14;for(let i=0;i<4;i++){g.beginPath();g.moveTo(0,-r);g.quadraticCurveTo((i-1.5)*r*0.6,0,0,r);g.stroke();}}
+    g.beginPath();g.ellipse(-r*0.35,-r*0.4,r*0.25,r*0.15,-0.6,0,6.28);g.fillStyle='rgba(255,255,255,.35)';g.fill();
+    if(!t.seeds){g.fillStyle='#5a8a3a';g.beginPath();g.ellipse(r*0.1,-r*0.95,r*0.28,r*0.12,0.5,0,6.28);g.fill();}
+  }
+  g.restore();
+}
+function drawHalf(h){
+  g.save();g.translate(h.x,h.y);g.rotate(h.rot);const r=h.r,s=h.side;const a0=s>0?0:Math.PI,a1=s>0?Math.PI:Math.PI*2;
+  g.beginPath();g.arc(0,0,r,a0,a1);g.closePath();g.fillStyle=h.type.skin;g.fill();g.lineWidth=r*0.12;g.strokeStyle=h.type.rim;g.stroke();
+  g.beginPath();g.arc(0,0,r*0.82,a0,a1);g.closePath();g.fillStyle=h.type.flesh;g.fill();
+  if(h.type.seeds){g.fillStyle='#2a1a10';for(let i=-2;i<=2;i++){g.beginPath();g.ellipse(i*r*0.28,s*r*0.4,r*0.06,r*0.1,0,0,6.28);g.fill();}}
+  g.restore();
+}
+function render(){
+  g.setTransform(1,0,0,1,0,0);g.clearRect(0,0,W,H);
+  if(S.shake>0)g.translate(rand(-1,1)*8*dpr,rand(-1,1)*8*dpr);
+  if(bg)g.drawImage(bg,0,0);
+  for(const s of S.stains){g.save();g.globalAlpha=Math.max(0,s.a)*0.7;g.translate(s.x,s.y);g.rotate(s.rot);g.fillStyle=s.c;g.beginPath();for(let i=0;i<9;i++){const a=i/9*6.28;const rr=s.r*(0.7+((i*7)%3)*0.15);g.lineTo(Math.cos(a)*rr,Math.sin(a)*rr*0.8);}g.closePath();g.fill();g.restore();}
+  for(const h of S.halves)drawHalf(h);
+  for(const f of S.fruits)if(f.delay<=0)drawFruit(f);
+  if(S.trail.length>1){g.lineCap='round';g.lineJoin='round';const now=performance.now();for(let i=1;i<S.trail.length;i++){const a=Math.max(0,1-(now-S.trail[i].t)/160);g.strokeStyle='rgba(255,255,255,'+(a*0.9).toFixed(2)+')';g.lineWidth=(2+a*8)*dpr;g.beginPath();g.moveTo(S.trail[i-1].x,S.trail[i-1].y);g.lineTo(S.trail[i].x,S.trail[i].y);g.stroke();}}
+  fx.draw(g,1);
+  if(S.flash>0){g.fillStyle='rgba(255,255,255,'+Math.min(1,S.flash*1.6).toFixed(2)+')';g.fillRect(-20,-20,W+40,H+40);}
+  if(S.state==='ready'){text(g,'水果忍者',W/2,H*0.36,Math.min(W,H)*0.13,'#fff','#3a1d08');text(g,'FRUIT NINJA',W/2,H*0.36+Math.min(W,H)*0.1,Math.min(W,H)*0.045,'#ffd27a','#3a1d08');}
+}
+function segDist(a,b,p){const dx=b.x-a.x,dy=b.y-a.y;const l2=dx*dx+dy*dy;let t=l2?((p.x-a.x)*dx+(p.y-a.y)*dy)/l2:0;t=clamp(t,0,1);return Math.hypot(p.x-(a.x+dx*t),p.y-(a.y+dy*t));}
+function addPoint(p){
+  const now=performance.now();
+  if(S.last&&S.state==='play'){const a=S.last,b=p;if(Math.hypot(b.x-a.x,b.y-a.y)>2*dpr){const ang=Math.atan2(b.y-a.y,b.x-a.x);for(const f of S.fruits.slice()){if(S.state!=='play')break;if(f.delay>0)continue;if(segDist(a,b,f)<f.r)slice(f,ang);}}}
+  S.last=p;S.trail.push({x:p.x,y:p.y,t:now});if(S.trail.length>16)S.trail.shift();
+}
+cv.addEventListener('pointerdown',e=>{
+  if(S.modal)return;e.preventDefault();
+  if(S.state==='ready'||S.state==='over'){start();return;}
+  if(S.state!=='play')return;
+  S.down=true;S.last=null;S.trail=[];try{cv.setPointerCapture(e.pointerId);}catch(err){}
+  addPoint(pointerPos(cv,e));
+});
+cv.addEventListener('pointermove',e=>{if(!S.down||S.state!=='play')return;addPoint(pointerPos(cv,e));});
+const end=()=>{S.down=false;S.last=null;};
+cv.addEventListener('pointerup',end);cv.addEventListener('pointercancel',end);
+function gameOver(reason){
+  S.state='over';S.down=false;if(S.score>S.best){S.best=S.score;store.set('aigame.fruit.best',S.best);}hud();
+  S.modal=()=>dialog(overlay,{title:reason,lines:['本局 '+S.score+' 分','最高 '+S.best+' 分'],buttons:[{label:'再来一局',primary:true,onClick(){S.modal=null;start();}},{label:'返回',onClick(){location.href='../index.html';}}]});
+  S.modal();
+}
+function pause(){
+  if(S.state!=='play'||S.modal)return;S.down=false;
+  S.modal=()=>dialog(overlay,{title:'暂停',lines:['分数 '+S.score],buttons:[{label:'继续',primary:true,onClick(){S.modal=null;}},{label:'重开',onClick(){S.modal=null;start();}},{label:'返回',onClick(){location.href='../index.html';}}]});
+  S.modal();
+}
+$('#btnPause').addEventListener('click',pause);
+$('#btnRestart').addEventListener('click',()=>{Shell.closeDialog(overlay);S.modal=null;start();});
+document.addEventListener('visibilitychange',()=>{if(document.hidden)pause();});
+resize();watchResize(stage,resize);hud();
+Shell.makeLoop(dt=>{if(!S.modal)update(dt);render();}).start();
+if(location.hash==='#auto')start();
+})();
+</script>
+</body>
+</html>

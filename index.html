@@ -13,15 +13,16 @@ body{background:var(--bezel);color:var(--ink);font-family:"PingFang SC","Microso
 #phone{max-width:460px;margin:0 auto;min-height:100vh;min-height:100dvh;padding:8px 8px calc(8px + env(safe-area-inset-bottom));display:flex;flex-direction:column}
 #screen{flex:1;background:var(--lcd);border:3px solid #17140f;border-radius:12px;box-shadow:inset 0 0 0 2px #7d6440,0 0 0 2px #3a3734,0 10px 30px rgba(0,0,0,.45);overflow:hidden;display:flex;flex-direction:column}
 .bar{padding:6px 12px;background:linear-gradient(#ffd77a,#f0b642);border-bottom:2px solid var(--ink);font-family:ui-monospace,Menlo,Consolas,monospace;font-weight:700;letter-spacing:.12em;font-size:13px;text-align:center}
-.menu{padding:16px 12px;display:flex;flex-direction:column;gap:12px;flex:1}
+.menu{padding:14px 12px 12px;display:flex;flex-direction:column;gap:10px;flex:1}
 h1{margin:0;font-size:22px;letter-spacing:.04em}
 .lead{margin:0 0 4px;color:var(--ink-soft);font-size:13px}
-a.item{display:grid;grid-template-columns:1fr auto;align-items:center;gap:12px;padding:14px 14px;background:var(--card);border:2px solid var(--ink);border-radius:8px;box-shadow:3px 3px 0 var(--ink);color:inherit;text-decoration:none}
+a.item{display:grid;grid-template-columns:48px 1fr auto;align-items:center;gap:12px;padding:10px 12px;background:var(--card);border:2px solid var(--ink);border-radius:8px;box-shadow:3px 3px 0 var(--ink);color:inherit;text-decoration:none}
 a.item:active{transform:translate(2px,2px);box-shadow:1px 1px 0 var(--ink)}
-a.item .t{font-weight:700;font-size:17px;display:block}
-a.item .s{display:block;color:var(--ink-soft);font-size:12px;margin-top:3px;font-family:ui-monospace,Menlo,Consolas,monospace}
+a.item canvas{width:48px;height:48px;display:block}
+a.item .t{font-weight:700;font-size:16px;display:block}
+a.item .s{display:block;color:var(--ink-soft);font-size:12px;margin-top:2px;font-family:ui-monospace,Menlo,Consolas,monospace}
 a.item .go{color:var(--accent);font-weight:700;font-size:20px;font-family:ui-monospace,Menlo,Consolas,monospace}
-.foot{margin-top:auto;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11px;color:var(--ink-soft);letter-spacing:.1em;display:flex;justify-content:space-between;padding:4px 4px 0}
+.foot{margin-top:auto;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11px;color:var(--ink-soft);letter-spacing:.1em;display:flex;justify-content:space-between;padding:6px 4px 0}
 </style>
 </head>
 <body>
@@ -29,10 +30,30 @@ a.item .go{color:var(--accent);font-weight:700;font-size:20px;font-family:ui-mon
   <div class="bar">游戏</div>
   <div class="menu">
     <h1>AIGAME 游戏机</h1>
-    <p class="lead">点开就玩,不用安装。进度记在你手机的浏览器里。</p>
-    <a class="item" href="sushi-sokoban/"><span><span class="t">寿司消消乐 · 推箱子</span><span class="s">复古像素 · 闯关计时 · 34 关推箱子</span></span><span class="go">▶</span></a>
+    <p class="lead">点开就玩,不用安装。记录存在你手机的浏览器里。</p>
+    <a class="item" href="sushi-sokoban/index.html"><canvas data-icon="sushi"></canvas><span><span class="t">寿司消消乐 · 推箱子</span><span class="s">复古像素 · 闯关计时 · 34 关</span></span><span class="go">▶</span></a>
+    <a class="item" href="fruit/index.html"><canvas data-icon="fruit"></canvas><span><span class="t">水果忍者</span><span class="s">划屏切水果 · 连斩 · 别碰炸弹</span></span><span class="go">▶</span></a>
+    <a class="item" href="birds/index.html"><canvas data-icon="birds"></canvas><span><span class="t">愤怒的小鸟</span><span class="s">弹弓打绿猪 · 5 关 · 真物理</span></span><span class="go">▶</span></a>
+    <a class="item" href="temple/index.html"><canvas data-icon="temple"></canvas><span><span class="t">神庙逃亡</span><span class="s">三道跑酷 · 跳 铲 换道 · 吃金币</span></span><span class="go">▶</span></a>
+    <a class="item" href="ski/index.html"><canvas data-icon="ski"></canvas><span><span class="t">滑雪大冒险</span><span class="s">按住起跳 · 后空翻 · 躲雪崩</span></span><span class="go">▶</span></a>
+    <a class="item" href="rope/index.html"><canvas data-icon="rope"></canvas><span><span class="t">割绳子</span><span class="s">割绳喂糖 · 12 关 · 集星星</span></span><span class="go">▶</span></a>
     <p class="foot"><span>AIGAME</span><span>2026</span></p>
   </div>
 </div></div>
+<script>
+(function(){
+const dpr=Math.min(3,window.devicePixelRatio||1);
+const draw={
+  sushi(g){g.fillStyle='#fffaf0';rr(g,6,26,36,16,6);g.fill();g.strokeStyle='#4a2c15';g.lineWidth=2.5;g.stroke();g.fillStyle='#f08a3c';rr(g,5,12,38,18,8);g.fill();g.stroke();g.strokeStyle='#ffb673';g.lineWidth=2;for(const x of [14,24,34]){g.beginPath();g.moveTo(x,15);g.lineTo(x-4,27);g.stroke();}},
+  fruit(g){g.fillStyle='#3f9a4a';g.beginPath();g.moveTo(6,16);g.arc(24,16,20,0,Math.PI);g.closePath();g.fill();g.strokeStyle='#2b6b33';g.lineWidth=2.5;g.stroke();g.fillStyle='#ff5a5a';g.beginPath();g.moveTo(9,17);g.arc(24,17,15,0,Math.PI);g.closePath();g.fill();g.fillStyle='#2a1a10';for(const p of [[18,22],[26,26],[31,21]]){g.beginPath();g.ellipse(p[0],p[1],1.6,2.6,0,0,6.28);g.fill();}g.strokeStyle='#fff';g.lineWidth=3;g.beginPath();g.moveTo(8,40);g.lineTo(40,10);g.stroke();},
+  birds(g){g.fillStyle='#e0322b';g.beginPath();g.arc(24,26,17,0,6.28);g.fill();g.strokeStyle='#6b100c';g.lineWidth=2.5;g.stroke();g.fillStyle='#fff';g.beginPath();g.arc(18,22,4.5,0,6.28);g.arc(30,22,4.5,0,6.28);g.fill();g.fillStyle='#111';g.beginPath();g.arc(19,22,2,0,6.28);g.arc(31,22,2,0,6.28);g.fill();g.strokeStyle='#111';g.lineWidth=3;g.beginPath();g.moveTo(12,15);g.lineTo(22,19);g.moveTo(36,15);g.lineTo(26,19);g.stroke();g.fillStyle='#f5a623';g.beginPath();g.moveTo(21,27);g.lineTo(36,31);g.lineTo(21,35);g.closePath();g.fill();g.fillStyle='#e0322b';g.beginPath();g.moveTo(20,10);g.lineTo(16,2);g.lineTo(24,7);g.lineTo(27,1);g.lineTo(28,10);g.closePath();g.fill();},
+  temple(g){g.fillStyle='#3d5a36';g.fillRect(0,0,48,48);g.fillStyle='#a08a5a';g.beginPath();g.moveTo(4,48);g.lineTo(18,10);g.lineTo(30,10);g.lineTo(44,48);g.closePath();g.fill();g.strokeStyle='rgba(60,40,20,.5)';g.lineWidth=1.5;for(let y=16;y<48;y+=8){g.beginPath();g.moveTo(24-(y-10)*0.55,y);g.lineTo(24+(y-10)*0.55,y);g.stroke();}g.fillStyle='#f5c518';g.beginPath();g.arc(24,30,8,0,6.28);g.fill();g.strokeStyle='#a87a00';g.lineWidth=2;g.stroke();g.beginPath();g.arc(24,30,4,0,6.28);g.stroke();},
+  ski(g){const sky=g.createLinearGradient(0,0,0,48);sky.addColorStop(0,'#1b2f5a');sky.addColorStop(1,'#6f8fc0');g.fillStyle=sky;g.fillRect(0,0,48,48);g.fillStyle='#f7fbff';g.beginPath();g.moveTo(0,14);g.quadraticCurveTo(20,20,30,34);g.quadraticCurveTo(38,44,48,42);g.lineTo(48,48);g.lineTo(0,48);g.closePath();g.fill();g.save();g.translate(22,20);g.rotate(0.5);g.strokeStyle='#2b2926';g.lineWidth=2.5;g.beginPath();g.moveTo(-9,0);g.lineTo(9,0);g.stroke();g.fillStyle='#d9453a';rr(g,-3.5,-13,7,12,2);g.fill();g.fillStyle='#f2c9a0';g.beginPath();g.arc(0,-17,4,0,6.28);g.fill();g.restore();},
+  rope(g){g.fillStyle='#c9a26b';g.fillRect(0,0,48,48);g.fillStyle='#62c04a';g.beginPath();g.arc(24,26,18,0,6.28);g.fill();g.strokeStyle='#2f6b2a';g.lineWidth=2.5;g.stroke();g.fillStyle='#fff';g.beginPath();g.arc(17,22,5.5,0,6.28);g.arc(31,22,5.5,0,6.28);g.fill();g.stroke();g.fillStyle='#111';g.beginPath();g.arc(18,23,2.6,0,6.28);g.arc(32,23,2.6,0,6.28);g.fill();g.fillStyle='#8a1d2a';g.beginPath();g.ellipse(24,34,9,5,0,0,6.28);g.fill();g.stroke();g.strokeStyle='#6b4423';g.lineWidth=2.5;g.beginPath();g.moveTo(40,2);g.lineTo(36,14);g.stroke();g.fillStyle='#ff8fb5';g.beginPath();g.arc(36,16,4,0,6.28);g.fill();}
+};
+function rr(g,x,y,w,h,r){g.beginPath();g.moveTo(x+r,y);g.arcTo(x+w,y,x+w,y+h,r);g.arcTo(x+w,y+h,x,y+h,r);g.arcTo(x,y+h,x,y,r);g.arcTo(x,y,x+w,y,r);g.closePath();}
+document.querySelectorAll('canvas[data-icon]').forEach(cv=>{cv.width=48*dpr;cv.height=48*dpr;const g=cv.getContext('2d');g.scale(dpr,dpr);g.lineJoin='round';g.lineCap='round';const fn=draw[cv.dataset.icon];if(fn)fn(g);});
+})();
+</script>
 </body>
 </html>

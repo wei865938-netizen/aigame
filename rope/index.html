@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#2b2926">
+<title>割绳子</title>
+<link rel="stylesheet" href="../common/shell.css">
+</head>
+<body>
+<div id="phone"><div id="screen">
+<div class="hud"><span>第 <b id="lvl">1</b> 关 <small id="lvlName"></small></span><span class="stars" id="stars">☆☆☆</span><span>总星 <b id="total">0</b></span></div>
+<div class="stage" id="stage"><canvas id="cv"></canvas><div class="hint" id="hint">划过绳子把它割断,让糖果掉进小怪兽嘴里 · 顺路吃星星 · 点一下戳破泡泡</div></div>
+<div class="softkeys"><button id="btnRestart">重来</button><button id="btnSelect">选关</button><button data-go="../index.html">返回</button></div>
+<div class="overlay" id="overlay" hidden></div>
+</div></div>
+<script src="../common/shell.js"></script>
+<script>
+(function(){
+'use strict';
+const {$,clamp,store,fit,watchResize,pointerPos,dialog,closeDialog,bindNav,text,makeFx}=Shell;
+bindNav();
+/* 逻辑坐标 360×560;pins:[x,y,len] stars:[x,y] bubbles:[x,y,r] candy:[x,y] monster:[x,y] */
+/*ROPE-LEVELS-START*/
+const LEVELS=[
+{name:'直落',pins:[[180,90,190]],candy:[180,280],stars:[[180,340],[180,395],[180,445]],monster:[180,490]},
+{name:'双绳',pins:[[90,80,180],[270,80,180]],candy:[180,230],stars:[[180,300],[180,370],[180,440]],monster:[180,490]},
+{name:'秋千',pins:[[200,80,175]],candy:[40,150],stars:[[200,262],[255,290],[300,360]],monster:[300,430]},
+{name:'泡泡',pins:[[100,80,145]],candy:[100,225],bubbles:[[100,330,30]],stars:[[100,290],[100,170],[100,110]],monster:[100,45]},
+{name:'荡进泡泡',pins:[[240,90,176]],candy:[90,180],bubbles:[[330,240,30]],stars:[[240,285],[300,255],[325,150]],monster:[330,60]},
+{name:'两段',pins:[[80,80,150],[280,80,150]],candy:[180,190],stars:[[280,240],[230,215],[310,330]],monster:[320,440]},
+{name:'三绳',pins:[[60,70,216],[180,60,190],[300,70,216]],candy:[180,250],stars:[[180,320],[180,390],[180,440]],monster:[180,490]},
+{name:'时机',pins:[[180,70,170]],candy:[30,150],stars:[[180,245],[300,180],[330,260]],monster:[330,340]},
+{name:'泡泡秋千',pins:[[120,80,163],[280,180,143]],candy:[150,240],stars:[[280,340],[340,300],[300,400]],monster:[320,440]},
+{name:'泡泡双绳',pins:[[90,90,150],[270,90,150]],candy:[180,210],bubbles:[[180,330,30]],stars:[[180,270],[180,150],[180,100]],monster:[180,50]},
+{name:'大摆',pins:[[180,60,195]],candy:[20,171],stars:[[100,238],[180,255],[338,320]],monster:[335,430]},
+{name:'终章',pins:[[70,90,190],[300,80,190]],candy:[180,230],bubbles:[[70,295,30]],stars:[[120,260],[70,200],[70,120]],monster:[70,45]}
+];
+/*ROPE-LEVELS-END*/
+/*ROPE-ENGINE-START*/
+const RopeSim=(function(){
+  const G=1400,DT=1/60;
+  function makeLevel(L){
+    const st={candy:{x:L.candy[0],y:L.candy[1],px:L.candy[0],py:L.candy[1],bubble:null},ropes:[],stars:L.stars.map(s=>({x:s[0],y:s[1],got:false})),bubbles:(L.bubbles||[]).map(b=>({x:b[0],y:b[1],r:b[2],popped:false,attached:false})),monster:{x:L.monster[0],y:L.monster[1]},t:0,done:null,starsGot:0};
+    for(const p of L.pins){const n=Math.max(2,Math.ceil(p[2]/12)+1);const pts=[];for(let i=0;i<n;i++){const k=i/(n-1);const x=p[0]+(st.candy.x-p[0])*k,y=p[1]+(st.candy.y-p[1])*k;pts.push({x,y,px:x,py:y});}st.ropes.push({pin:{x:p[0],y:p[1]},pts,rest:p[2]/(n-1),alive:true,cutT:-1});}
+    return st;
+  }
+  function step(st){
+    if(st.done)return;st.t+=DT;const c=st.candy;const inB=c.bubble&&!c.bubble.popped;
+    {const ay=inB?-G*0.9:G,damp=inB?0.975:0.995;const nx=c.x+(c.x-c.px)*damp,ny=c.y+(c.y-c.py)*damp+ay*DT*DT;c.px=c.x;c.py=c.y;c.x=nx;c.y=ny;}
+    for(const r of st.ropes){if(!r.alive)continue;for(let i=1;i<r.pts.length-1;i++){const p=r.pts[i];const nx=p.x+(p.x-p.px)*0.98,ny=p.y+(p.y-p.py)*0.98+G*DT*DT;p.px=p.x;p.py=p.y;p.x=nx;p.y=ny;}}
+    for(let it=0;it<12;it++){
+      for(const r of st.ropes){if(!r.alive)continue;const pts=r.pts,last=pts.length-1;pts[0].x=r.pin.x;pts[0].y=r.pin.y;pts[last].x=c.x;pts[last].y=c.y;
+        for(let i=0;i<last;i++){const a=pts[i],b=pts[i+1];const dx=b.x-a.x,dy=b.y-a.y;const d=Math.hypot(dx,dy)||0.0001;if(d<=r.rest)continue;const diff=(d-r.rest)/d;
+          let wa=0.5,wb=0.5;if(i===0){wa=0;wb=1;}if(i+1===last){if(i===0){wa=0;wb=1;}else{wa=0.85;wb=0.15;}}
+          a.x+=dx*diff*wa;a.y+=dy*diff*wa;b.x-=dx*diff*wb;b.y-=dy*diff*wb;}
+        c.x=pts[last].x;c.y=pts[last].y;}
+    }
+    for(const s of st.stars)if(!s.got&&Math.hypot(c.x-s.x,c.y-s.y)<24){s.got=true;st.starsGot++;}
+    for(const b of st.bubbles){if(b.attached&&!b.popped){b.x=c.x;b.y=c.y;}else if(!b.popped&&!b.attached&&Math.hypot(c.x-b.x,c.y-b.y)<b.r+4){b.attached=true;c.bubble=b;}}
+    if(Math.hypot(c.x-st.monster.x,c.y-st.monster.y)<34)st.done='win';
+    else if(c.y>640||c.x<-80||c.x>440||c.y<-260)st.done='fail';
+  }
+  function cut(st,i){const r=st.ropes[i];if(r&&r.alive){r.alive=false;r.cutT=st.t;return true;}return false;}
+  function pop(st){const b=st.candy.bubble;if(b&&!b.popped){b.popped=true;st.candy.bubble=null;return true;}return false;}
+  function segHit(a,b,c,d){const det=(b.x-a.x)*(d.y-c.y)-(b.y-a.y)*(d.x-c.x);if(Math.abs(det)<1e-9)return false;const t=((c.x-a.x)*(d.y-c.y)-(c.y-a.y)*(d.x-c.x))/det,u=((c.x-a.x)*(b.y-a.y)-(c.y-a.y)*(b.x-a.x))/det;return t>=0&&t<=1&&u>=0&&u<=1;}
+  function cutBySwipe(st,a,b){let n=0;st.ropes.forEach((r,i)=>{if(!r.alive)return;for(let k=0;k<r.pts.length-1;k++)if(segHit(a,b,r.pts[k],r.pts[k+1])){cut(st,i);n++;break;}});return n;}
+  return {G,DT,makeLevel,step,cut,pop,cutBySwipe};
+})();
+/*ROPE-ENGINE-END*/
+const cv=$('#cv'),g=cv.getContext('2d'),stage=$('#stage'),overlay=$('#overlay'),hint=$('#hint');
+const LW=360,LH=560;let W=0,H=0,dpr=1,sc=1,ox=0,oy=0;
+const fx=makeFx();
+const prog=store.get('aigame.rope.v1',{stars:{},cur:0});
+const S={lvl:0,st:null,acc:0,modal:null,last:null,down:null,mouth:0,fail:0,titleT:0};
+function resize(){const f=fit(cv,stage);W=f.w;H=f.h;dpr=f.dpr;sc=Math.min(W/LW,H/LH);ox=(W-LW*sc)/2;oy=(H-LH*sc)/2;}
+function total(){let n=0;for(const k in prog.stars)n+=prog.stars[k];return n;}
+function load(n){n=clamp(n,0,LEVELS.length-1);S.lvl=n;S.st=RopeSim.makeLevel(LEVELS[n]);S.acc=0;S.modal=null;S.fail=0;S.titleT=1.4;closeDialog(overlay);fx.clear();prog.cur=n;store.set('aigame.rope.v1',prog);hud();}
+function hud(){$('#lvl').textContent=S.lvl+1;$('#lvlName').textContent=LEVELS[S.lvl].name;const got=S.st?S.st.starsGot:0;$('#stars').textContent='★'.repeat(got)+'☆'.repeat(3-got);$('#total').textContent=total();}
+function toL(p){return {x:(p.x-ox)/sc,y:(p.y-oy)/sc};}
+function update(dt){
+  const st=S.st;if(!st)return;S.titleT-=dt;
+  if(!st.done){S.acc=Math.min(S.acc+dt,0.1);const before=st.starsGot;while(S.acc>=RopeSim.DT){RopeSim.step(st);S.acc-=RopeSim.DT;if(st.done)break;}
+    if(st.starsGot>before){fx.pop('★',st.candy.x,st.candy.y-30,'#ffd23f',26);fx.burst(st.candy.x,st.candy.y,'#ffd23f',10,140,4);hud();}
+    if(st.done==='win')win();else if(st.done==='fail')fail();}
+  const c=st.candy,m=st.monster;const d=Math.hypot(c.x-m.x,c.y-m.y);S.mouth=Shell.lerp(S.mouth,d<120?1:0.15,Math.min(1,dt*8));
+  fx.update(dt,600);
+}
+function win(){
+  const got=S.st.starsGot;const prev=prog.stars[S.lvl]||0;if(got>prev)prog.stars[S.lvl]=got;store.set('aigame.rope.v1',prog);hud();
+  fx.burst(S.st.monster.x,S.st.monster.y,'#7bd36b',16,160,5);
+  const last=S.lvl>=LEVELS.length-1;const btns=[];
+  if(!last)btns.push({label:'下一关',primary:true,onClick(){load(S.lvl+1);}});
+  btns.push({label:'重玩',onClick(){load(S.lvl);}});btns.push({label:'选关',onClick(){selectDialog();}});
+  S.modal=()=>dialog(overlay,{title:last?'全部通关!':'吃到了!',lines:['本关 '+'★'.repeat(got)+'☆'.repeat(3-got),'总星 '+total()+' / '+(LEVELS.length*3)],buttons:btns});
+  setTimeout(()=>{if(S.st.done==='win'&&S.modal)S.modal();},500);
+}
+function fail(){
+  S.modal=()=>dialog(overlay,{title:'糖果掉了',lines:['第 '+(S.lvl+1)+' 关 '+LEVELS[S.lvl].name],buttons:[{label:'再试一次',primary:true,onClick(){load(S.lvl);}},{label:'选关',onClick(){selectDialog();}}]});
+  setTimeout(()=>{if(S.st.done==='fail'&&S.modal)S.modal();},300);
+}
+function selectDialog(){
+  S.modal=selectDialog;
+  dialog(overlay,{title:'选择关卡',build(d){const grid=document.createElement('div');grid.className='lvgrid';
+    LEVELS.forEach((L,i)=>{const b=document.createElement('button');const s=prog.stars[i];b.innerHTML=(i+1)+'<small>'+(s!=null?'★'.repeat(s)+'☆'.repeat(3-s):'')+'</small>';if(s!=null)b.classList.add('done');if(i===S.lvl)b.classList.add('cur');b.title=L.name;b.addEventListener('click',()=>{closeDialog(overlay);load(i);});grid.appendChild(b);});
+    d.appendChild(grid);},buttons:[{label:'关闭',onClick(){S.modal=null;}}]});
+}
+/* 输入:滑动割绳、点一下戳泡泡 */
+cv.addEventListener('pointerdown',e=>{if(S.modal||!S.st||S.st.done)return;e.preventDefault();hint.hidden=true;const p=toL(pointerPos(cv,e));S.down={x:p.x,y:p.y,moved:false};S.last=p;try{cv.setPointerCapture(e.pointerId);}catch(err){}});
+cv.addEventListener('pointermove',e=>{if(!S.down||!S.st||S.st.done)return;const p=toL(pointerPos(cv,e));if(Math.hypot(p.x-S.down.x,p.y-S.down.y)>6)S.down.moved=true;
+  const n=RopeSim.cutBySwipe(S.st,S.last,p);if(n){fx.burst((S.last.x+p.x)/2,(S.last.y+p.y)/2,'#c98b4a',8,120,3);}S.last=p;});
+const up=()=>{if(S.down&&!S.down.moved&&S.st&&!S.st.done){if(RopeSim.pop(S.st))fx.burst(S.st.candy.x,S.st.candy.y,'#bfe6ff',12,150,4);}S.down=null;S.last=null;};
+cv.addEventListener('pointerup',up);cv.addEventListener('pointercancel',up);
+/* 绘制 */
+function render(){
+  g.setTransform(1,0,0,1,0,0);
+  g.fillStyle='#c9a26b';g.fillRect(0,0,W,H);
+  g.strokeStyle='rgba(120,80,30,.18)';g.lineWidth=1*dpr;for(let y=0;y<H;y+=9*dpr){g.beginPath();g.moveTo(0,y);g.lineTo(W,y);g.stroke();}
+  g.setTransform(sc,0,0,sc,ox,oy);
+  // 胶带装饰
+  g.fillStyle='rgba(255,245,210,.55)';g.save();g.translate(60,470);g.rotate(-0.3);g.fillRect(-60,-14,120,28);g.restore();g.save();g.translate(300,140);g.rotate(0.5);g.fillRect(-50,-12,100,24);g.restore();
+  const st=S.st;if(!st)return;
+  // 怪兽
+  drawMonster(st.monster.x,st.monster.y);
+  // 星星
+  for(const s of st.stars)if(!s.got)Shell.star(g,s.x,s.y,16,0,'#ffd23f','#b8860b');
+  // 泡泡(未附着)
+  for(const b of st.bubbles)if(!b.popped&&!b.attached)drawBubble(b.x,b.y,b.r);
+  // 绳子
+  for(const r of st.ropes){
+    if(!r.alive){if(st.t-r.cutT<0.6){g.globalAlpha=1-(st.t-r.cutT)/0.6;g.strokeStyle='#8a5a2b';g.lineWidth=4;g.beginPath();g.moveTo(r.pin.x,r.pin.y);g.lineTo(r.pin.x+6,r.pin.y+22);g.stroke();g.globalAlpha=1;}drawPin(r.pin.x,r.pin.y);continue;}
+    g.lineCap='round';g.lineJoin='round';g.strokeStyle='#6b4423';g.lineWidth=5;g.beginPath();g.moveTo(r.pts[0].x,r.pts[0].y);for(let i=1;i<r.pts.length;i++)g.lineTo(r.pts[i].x,r.pts[i].y);g.stroke();
+    g.strokeStyle='#c98b4a';g.lineWidth=2;g.setLineDash([6,5]);g.stroke();g.setLineDash([]);
+    drawPin(r.pin.x,r.pin.y);
+  }
+  // 糖果
+  const c=st.candy;g.save();g.translate(c.x,c.y);g.rotate((c.x-c.px)*0.05);
+  g.fillStyle='#ff6f9c';for(const s of [-1,1]){g.beginPath();g.moveTo(s*12,-6);g.lineTo(s*24,-13);g.lineTo(s*22,0);g.lineTo(s*24,13);g.lineTo(s*12,6);g.closePath();g.fill();g.strokeStyle='#8a2a4a';g.lineWidth=2;g.stroke();}
+  g.beginPath();g.arc(0,0,15,0,6.28);g.fillStyle='#ff8fb5';g.fill();g.strokeStyle='#8a2a4a';g.lineWidth=2.5;g.stroke();
+  g.strokeStyle='#fff0f5';g.lineWidth=3;for(const a of [-0.6,0,0.6]){g.beginPath();g.moveTo(-10*Math.cos(a)+0,-10*Math.sin(a)-6);g.lineTo(10*Math.cos(a),10*Math.sin(a)-6);g.stroke();}
+  g.restore();
+  if(c.bubble&&!c.bubble.popped)drawBubble(c.x,c.y,c.bubble.r);
+  fx.draw(g,1);
+  if(S.titleT>0){g.globalAlpha=Math.min(1,S.titleT);text(g,'第 '+(S.lvl+1)+' 关 · '+LEVELS[S.lvl].name,LW/2,LH*0.5,24,'#fff','#4a2c15');g.globalAlpha=1;}
+}
+function drawPin(x,y){g.beginPath();g.arc(x,y,9,0,6.28);g.fillStyle='#3f8cd6';g.fill();g.lineWidth=2.5;g.strokeStyle='#1d4f8a';g.stroke();g.beginPath();g.arc(x,y,3.5,0,6.28);g.fillStyle='#e8f4ff';g.fill();}
+function drawBubble(x,y,r){g.beginPath();g.arc(x,y,r,0,6.28);g.fillStyle='rgba(180,225,255,.35)';g.fill();g.lineWidth=2;g.strokeStyle='rgba(120,190,240,.9)';g.stroke();g.beginPath();g.arc(x-r*0.35,y-r*0.35,r*0.22,0,6.28);g.fillStyle='rgba(255,255,255,.7)';g.fill();}
+function drawMonster(x,y){
+  g.save();g.translate(x,y);
+  g.fillStyle='#62c04a';g.beginPath();g.arc(0,0,34,0,6.28);g.fill();g.lineWidth=3;g.strokeStyle='#2f6b2a';g.stroke();
+  g.fillStyle='#62c04a';g.beginPath();g.moveTo(-14,-30);g.lineTo(-8,-46);g.lineTo(0,-31);g.moveTo(14,-30);g.lineTo(8,-46);g.lineTo(0,-31);g.fill();g.stroke();
+  g.fillStyle='#fff';g.beginPath();g.arc(-11,-8,9,0,6.28);g.arc(11,-8,9,0,6.28);g.fill();g.strokeStyle='#2f6b2a';g.lineWidth=2;g.stroke();
+  g.fillStyle='#111';g.beginPath();g.arc(-9,-7,4.5,0,6.28);g.arc(13,-7,4.5,0,6.28);g.fill();
+  const m=S.mouth;g.fillStyle='#8a1d2a';g.beginPath();g.ellipse(0,12,18,6+16*m,0,0,6.28);g.fill();g.strokeStyle='#2f6b2a';g.lineWidth=2.5;g.stroke();
+  g.fillStyle='#fff';g.beginPath();g.rect(-12,8,8,5+4*m);g.rect(4,8,8,5+4*m);g.fill();
+  g.restore();
+}
+$('#btnRestart').addEventListener('click',()=>load(S.lvl));
+$('#btnSelect').addEventListener('click',()=>{if(!S.modal)selectDialog();});
+document.addEventListener('keydown',e=>{if(e.key==='r'||e.key==='R')load(S.lvl);});
+resize();watchResize(stage,resize);
+load(clamp(prog.cur||0,0,LEVELS.length-1));
+Shell.makeLoop(dt=>{if(!S.modal)update(dt);render();}).start();
+})();
+</script>
+</body>
+</html>

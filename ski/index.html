@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#2b2926">
+<title>滑雪大冒险</title>
+<link rel="stylesheet" href="../common/shell.css">
+</head>
+<body>
+<div id="phone"><div id="screen">
+<div class="hud"><span><b id="dist">0</b> m</span><span>分数 <b id="score">0</b></span><span>最高 <b id="best">0</b></span></div>
+<div class="stage" id="stage"><canvas id="cv"></canvas><div class="hint" id="hint">按住起跳 · 空中按住后空翻 · 别被雪崩追上</div></div>
+<div class="softkeys"><button id="btnPause">暂停</button><button id="btnRestart">重开</button><button data-go="../index.html">返回</button></div>
+<div class="overlay" id="overlay" hidden></div>
+</div></div>
+<script src="../common/shell.js"></script>
+<script>
+(function(){
+'use strict';
+const {$,clamp,rand,lerp,store,fit,watchResize,dialog,closeDialog,bindNav,text,makeFx}=Shell;
+bindNav();
+const cv=$('#cv'),g=cv.getContext('2d'),stage=$('#stage'),overlay=$('#overlay'),hint=$('#hint');
+let W=0,H=0,dpr=1; // W,H 为 CSS 像素
+const GRAV=1500,MAXS=1150;
+const fx=makeFx();
+const P={x:0,y:0,vx:0,vy:0,ang:0,ground:true,air:0,rot:0,flips:0,crash:0};
+const S={state:'ready',t:0,hold:false,cam:{x:0,y:0},av:{x:-700,v:470},tricks:0,best:store.get('aigame.ski.best',0),modal:null};
+function resize(){const f=fit(cv,stage);dpr=f.dpr;W=f.w/dpr;H=f.h/dpr;}
+function terrain(x){return x*0.42+60*Math.sin(x/230)+35*Math.sin(x/97+1.3)+18*Math.sin(x/41+2.2)+(x>2500?40*Math.sin(x/520):0);}
+function slope(x){return Math.atan2(terrain(x+4)-terrain(x-4),8);}
+const hash=k=>{let h=Math.sin(k*127.1+311.7)*43758.5453;return h-Math.floor(h);};
+function rocks(x0,x1){const out=[];for(let k=Math.floor(x0/640);k<=Math.floor(x1/640);k++){if(k<3||hash(k)>0.62)continue;out.push(k*640+hash(k+9)*400);}return out;}
+function reset(){P.x=200;P.y=terrain(200);P.vx=120;P.vy=0;P.ang=slope(200);P.ground=true;P.air=0;P.rot=0;P.flips=0;P.crash=0;S.t=0;S.hold=false;S.av={x:-800,v:470};S.tricks=0;S.cam.x=P.x-W*0.32;S.cam.y=P.y-H*0.55;fx.clear();hud();}
+function start(){reset();S.state='play';hint.hidden=true;}
+const dist=()=>Math.max(0,Math.floor(P.x/12));const score=()=>dist()+S.tricks;
+function hud(){$('#dist').textContent=dist();$('#score').textContent=score();$('#best').textContent=Math.max(S.best,score());}
+function normAng(a){while(a>Math.PI)a-=2*Math.PI;while(a<-Math.PI)a+=2*Math.PI;return a;}
+function update(dt){
+  if(S.state!=='play')return;S.t+=dt;
+  if(P.crash>0){P.crash-=dt;P.vx*=0.9;}
+  // 积分
+  P.vy+=GRAV*dt;P.x+=P.vx*dt;P.y+=P.vy*dt;
+  const ty=terrain(P.x),th=slope(P.x);
+  if(P.y>=ty-0.5){ // 触地
+    if(!P.ground){ // 落地判定
+      const diff=Math.abs(normAng(P.ang-th));
+      if(diff>1.5&&P.crash<=0){crash('摔倒了');}
+      else{if(P.flips>0){const b=P.flips*100;S.tricks+=b;fx.pop('后空翻 ×'+P.flips+' +'+b,P.x,P.y-90,'#ffe066',20);}if(P.air>1.1){S.tricks+=50;fx.pop('腾空 +50',P.x,P.y-60,'#fff',16);}}
+      P.flips=0;P.rot=0;P.air=0;P.ground=true;
+    }
+    P.y=ty;P.ang=th;
+    let s=P.vx*Math.cos(th)+P.vy*Math.sin(th);
+    s+=GRAV*Math.sin(th)*dt-s*0.22*dt;s=clamp(s,60,MAXS);
+    P.vx=s*Math.cos(th);P.vy=s*Math.sin(th);
+    if(S.hold&&P.crash<=0){P.vy-=560;P.ground=false;P.air=0;}
+  }else{
+    P.ground=false;P.air+=dt;
+    if(S.hold){P.ang-=7*dt;P.rot+=7*dt;if(P.rot>=Math.PI*2){P.rot-=Math.PI*2;P.flips++;}}
+    else{P.ang+=normAng(slope(P.x)-P.ang)*Math.min(1,dt*1.8);}
+  }
+  // 石头
+  if(P.ground&&P.crash<=0){for(const rx of rocks(P.x-30,P.x+30))if(Math.abs(P.x-rx)<22)crash('撞上石头了');}
+  // 雪崩
+  S.av.v=470+S.t*3;S.av.x+=S.av.v*dt;S.av.x=Math.max(S.av.x,P.x-1500);
+  if(S.av.x>P.x-30)die();
+  // 相机
+  S.cam.x=lerp(S.cam.x,P.x-W*0.32,Math.min(1,dt*4));S.cam.y=lerp(S.cam.y,P.y-H*0.55,Math.min(1,dt*3));
+  fx.update(dt,300);hud();
+}
+function crash(why){P.crash=0.9;P.vx*=0.25;P.vy=0;P.ang=slope(P.x);P.flips=0;P.rot=0;fx.pop(why,P.x,P.y-70,'#ff8a7a',18);fx.burst(P.x,P.y-10,'#fff',12,200,4);}
+function die(){
+  S.state='over';const sc=score();if(sc>S.best){S.best=sc;store.set('aigame.ski.best',S.best);}hud();
+  S.modal=()=>dialog(overlay,{title:'被雪崩吞了',lines:['滑了 '+dist()+' 米 · 花样 +'+S.tricks,'得分 '+sc+' · 最高 '+S.best],buttons:[{label:'再滑一次',primary:true,onClick(){S.modal=null;start();}},{label:'返回',onClick(){location.href='../index.html';}}]});
+  setTimeout(()=>{if(S.state==='over')S.modal();},600);
+}
+function pause(){if(S.state!=='play'||S.modal)return;S.hold=false;S.modal=()=>dialog(overlay,{title:'暂停',lines:[dist()+' 米'],buttons:[{label:'继续',primary:true,onClick(){S.modal=null;}},{label:'重开',onClick(){S.modal=null;start();}},{label:'返回',onClick(){location.href='../index.html';}}]});S.modal();}
+cv.addEventListener('pointerdown',e=>{if(S.modal)return;e.preventDefault();if(S.state!=='play'){if(S.state==='ready'||S.state==='over')start();return;}S.hold=true;try{cv.setPointerCapture(e.pointerId);}catch(err){}});
+const up=()=>{S.hold=false;};cv.addEventListener('pointerup',up);cv.addEventListener('pointercancel',up);
+document.addEventListener('keydown',e=>{if(e.key===' '||e.key==='ArrowUp'){e.preventDefault();if(S.state!=='play'){if(!S.modal)start();}else S.hold=true;}});
+document.addEventListener('keyup',e=>{if(e.key===' '||e.key==='ArrowUp')S.hold=false;});
+/* 绘制 */
+function render(){
+  g.setTransform(dpr,0,0,dpr,0,0);
+  const sky=g.createLinearGradient(0,0,0,H);sky.addColorStop(0,'#1b2f5a');sky.addColorStop(0.55,'#6f8fc0');sky.addColorStop(1,'#f4c1a0');g.fillStyle=sky;g.fillRect(0,0,W,H);
+  const cx=S.cam.x,cy=S.cam.y;
+  // 远山两层
+  for(const layer of [[0.15,'#2c3d63',0.35,90],[0.3,'#3f5580',0.5,70]]){g.fillStyle=layer[1];g.beginPath();g.moveTo(0,H);for(let sx=0;sx<=W;sx+=8){const wx=sx+cx*layer[0];const y=H*layer[2]+Math.sin(wx/160)*layer[3]*0.5+Math.sin(wx/57+2)*layer[3]*0.3+Math.sin(wx/23)*8;g.lineTo(sx,y);}g.lineTo(W,H);g.closePath();g.fill();}
+  // 雪坡
+  g.fillStyle='#f7fbff';g.beginPath();g.moveTo(0,H+50);for(let sx=-10;sx<=W+10;sx+=6){const wx=sx+cx;g.lineTo(sx,terrain(wx)-cy);}g.lineTo(W+10,H+50);g.closePath();g.fill();
+  g.strokeStyle='#c6d8ee';g.lineWidth=3;g.beginPath();for(let sx=-10;sx<=W+10;sx+=6){const wx=sx+cx;const y=terrain(wx)-cy;if(sx===-10)g.moveTo(sx,y);else g.lineTo(sx,y);}g.stroke();
+  // 树与石头
+  for(let k=Math.floor(cx/160);k<=Math.floor((cx+W)/160);k++){const wx=k*160+hash(k)*100;if(hash(k+3)<0.45)continue;const x=wx-cx,y=terrain(wx)-cy,h=30+hash(k+5)*30;g.fillStyle='#2f6b45';g.beginPath();g.moveTo(x,y-h);g.lineTo(x-h*0.35,y);g.lineTo(x+h*0.35,y);g.closePath();g.fill();g.fillStyle='#f7fbff';g.beginPath();g.moveTo(x,y-h);g.lineTo(x-h*0.14,y-h*0.6);g.lineTo(x+h*0.14,y-h*0.6);g.closePath();g.fill();}
+  for(const rx of rocks(cx-50,cx+W+50)){const x=rx-cx,y=terrain(rx)-cy;g.fillStyle='#6f7a86';g.beginPath();g.moveTo(x-18,y+2);g.lineTo(x-10,y-16);g.lineTo(x+4,y-20);g.lineTo(x+17,y-8);g.lineTo(x+19,y+2);g.closePath();g.fill();g.strokeStyle='#3c444d';g.lineWidth=2;g.stroke();}
+  // 滑雪者
+  const px=P.x-cx,py=P.y-cy;
+  g.save();g.translate(px,py);g.rotate(P.ang+(P.crash>0?Math.sin(S.t*20)*0.6:0));
+  g.lineCap='round';g.strokeStyle='#2b2926';g.lineWidth=4;g.beginPath();g.moveTo(-22,0);g.lineTo(20,0);g.stroke(); // 雪板
+  g.fillStyle='#d9453a';Shell.rr(g,-8,-30,16,26,5);g.fill();g.strokeStyle='#4a2c15';g.lineWidth=2;g.stroke(); // 身体
+  g.strokeStyle='#4a2c15';g.lineWidth=4;g.beginPath();g.moveTo(-5,-6);g.lineTo(-9,0);g.moveTo(5,-6);g.lineTo(9,0);g.stroke(); // 腿
+  g.lineWidth=3.5;g.beginPath();g.moveTo(6,-22);g.lineTo(18,-10);g.moveTo(-6,-22);g.lineTo(-16,-12);g.stroke(); // 手臂
+  g.fillStyle='#f2c9a0';g.beginPath();g.arc(2,-38,8,0,6.28);g.fill();g.lineWidth=2;g.stroke(); // 头
+  g.fillStyle='#2e7d4f';g.beginPath();g.arc(2,-41,8.5,Math.PI,0);g.fill(); // 帽子
+  g.strokeStyle='#ffd23f';g.lineWidth=3;g.beginPath();g.moveTo(-5,-38);g.lineTo(-30,-30);g.stroke(); // 围巾
+  g.restore();
+  // 雪崩
+  const ax=S.av.x-cx;if(ax>-200){g.fillStyle='rgba(255,255,255,.96)';g.beginPath();g.moveTo(-50,H+50);g.lineTo(-50,-50);for(let sx=-50;sx<=ax+60;sx+=10){const wx=sx+cx;const base=terrain(wx)-cy;const h=140+Math.sin(sx/40+S.t*9)*25+Math.sin(sx/13+S.t*15)*10;const edge=Math.max(0,1-(ax+60-sx)/120);g.lineTo(sx,base-h*(1-edge*edge));}g.lineTo(ax+60,terrain(S.av.x+60)-cy+40);g.lineTo(ax+60,H+50);g.closePath();g.fill();
+    g.fillStyle='rgba(220,235,250,.9)';for(let i=0;i<8;i++){const sx=ax+40-i*38-Math.sin(S.t*7+i)*12;const wx=sx+cx;g.beginPath();g.arc(sx,terrain(wx)-cy-60-i*12-Math.abs(Math.sin(S.t*6+i*1.3))*30,22+i*3,0,6.28);g.fill();}}
+  fx.draw(g,1/dpr*0+1);
+  g.setTransform(dpr,0,0,dpr,0,0);
+  if(S.state==='ready'){text(g,'滑雪大冒险',W/2,H*0.32,Math.min(W,H)*0.13,'#fff','#1b2f5a');text(g,'SKI SAFARI',W/2,H*0.32+Math.min(W,H)*0.1,Math.min(W,H)*0.045,'#ffd27a','#1b2f5a');}
+}
+// 特效坐标在世界坐标里,绘制时转成屏幕坐标
+const _draw=fx.draw;fx.draw=function(ctx){ctx.save();ctx.translate(-S.cam.x,-S.cam.y);_draw.call(fx,ctx,1);ctx.restore();};
+$('#btnPause').addEventListener('click',pause);
+$('#btnRestart').addEventListener('click',()=>{closeDialog(overlay);S.modal=null;start();});
+document.addEventListener('visibilitychange',()=>{if(document.hidden)pause();});
+resize();watchResize(stage,resize);reset();hud();
+Shell.makeLoop(dt=>{if(!S.modal)update(dt);render();}).start();
+if(location.hash==='#auto')start();
+})();
+</script>
+</body>
+</html>

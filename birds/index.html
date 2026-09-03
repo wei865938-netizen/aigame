@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#2b2926">
+<title>愤怒的小鸟</title>
+<link rel="stylesheet" href="../common/shell.css">
+</head>
+<body>
+<div id="phone"><div id="screen">
+<div class="hud"><span>第 <b id="lvl">1</b> 关</span><span>分数 <b id="score">0</b></span><span id="birdsLeft" style="color:#d9453a">●●●</span></div>
+<div class="stage" id="stage"><canvas id="cv"></canvas><div class="hint" id="hint">按住小鸟往后拉,松手发射 · 打倒所有绿猪</div></div>
+<div class="softkeys"><button id="btnRestart">重玩本关</button><button id="btnSelect">选关</button><button data-go="../index.html">返回</button></div>
+<div class="overlay" id="overlay" hidden></div>
+</div></div>
+<script src="../common/matter.min.js"></script>
+<script src="../common/shell.js"></script>
+<script>
+(function(){
+'use strict';
+const {$,clamp,rand,store,fit,watchResize,pointerPos,dialog,closeDialog,bindNav,text,makeFx}=Shell;
+const {Engine,Bodies,Body,Composite,Events,Vector}=Matter;
+bindNav();
+const cv=$('#cv'),g=cv.getContext('2d'),stage=$('#stage'),overlay=$('#overlay'),hint=$('#hint');
+const W0=460,H0=390,GROUND=350;
+const SLING={x:95,y:305},REST={x:95,y:258},PULL=62;
+const MAT={wood:{fill:'#c98b4a',line:'#6f4218',hp:9,density:0.0015},glass:{fill:'rgba(170,225,255,.8)',line:'#3f86b0',hp:5,density:0.001},stone:{fill:'#9aa3ad',line:'#3f474f',hp:20,density:0.0035}};
+/* 关卡:方块 [x,y,w,h,材质],猪 [x,y] (逻辑坐标,地面 y=350) */
+const LEVELS=[
+ {birds:3,blocks:[[330,320,12,60,'wood'],[390,320,12,60,'wood'],[360,284,84,12,'wood']],pigs:[[360,336],[360,264]]},
+ {birds:3,blocks:[[350,325,12,50,'glass'],[410,325,12,50,'glass'],[380,294,84,12,'glass'],[350,268,12,40,'glass'],[410,268,12,40,'glass'],[380,242,84,12,'glass']],pigs:[[380,336],[380,276],[380,226]]},
+ {birds:4,blocks:[[380,338,100,24,'stone'],[350,300,12,52,'wood'],[410,300,12,52,'wood'],[380,268,76,12,'wood'],[380,244,30,36,'glass']],pigs:[[295,336],[380,254],[440,336]]},
+ {birds:4,blocks:[[300,320,12,60,'wood'],[336,320,12,60,'wood'],[318,284,52,12,'wood'],[318,262,24,32,'glass'],[400,322,12,56,'glass'],[440,322,12,56,'glass'],[420,288,60,12,'stone'],[420,266,12,32,'wood']],pigs:[[318,336],[420,336],[420,244]]},
+ {birds:4,blocks:[[330,338,40,24,'stone'],[374,338,40,24,'stone'],[418,338,40,24,'stone'],[352,314,40,24,'wood'],[396,314,40,24,'wood'],[374,290,40,24,'glass'],[374,266,14,24,'wood']],pigs:[[286,336],[374,246],[452,336]]}
+];
+const fx=makeFx();
+let W=0,H=0,dpr=1,sc=1,ox=0,oy=0;
+const engine=Engine.create();engine.gravity.y=1;const world=engine.world;
+const S={lvl:0,score:0,birdsLeft:0,bird:null,flying:false,flyT:0,drag:null,pigs:0,acc:0,over:false,modal:null,best:store.get('aigame.birds.best',{}),quiet:0};
+const prog=store.get('aigame.birds.prog',{done:{},cur:0});
+function resize(){const f=fit(cv,stage);W=f.w;H=f.h;dpr=f.dpr;sc=Math.min(W/W0,H/H0);ox=(W-W0*sc)/2;oy=H-H0*sc;}
+function clearWorld(){Composite.clear(world,false);}
+function load(n){
+  n=clamp(n,0,LEVELS.length-1);S.lvl=n;prog.cur=n;store.set('aigame.birds.prog',prog);
+  clearWorld();S.score=0;S.over=false;S.flying=false;S.drag=null;S.bird=null;S.modal=null;closeDialog(overlay);fx.clear();
+  const L=LEVELS[n];
+  Composite.add(world,[
+    Bodies.rectangle(W0/2,GROUND+40,W0*3,80,{isStatic:true,label:'ground',friction:0.8}),
+    Bodies.rectangle(-40,H0/2,80,H0*4,{isStatic:true,label:'wall'}),
+    Bodies.rectangle(W0+40,H0/2,80,H0*4,{isStatic:true,label:'wall'})
+  ]);
+  for(const b of L.blocks){const m=MAT[b[4]];const body=Bodies.rectangle(b[0],b[1],b[2],b[3],{density:m.density,friction:0.6,restitution:0.05,label:'block'});body.mat=b[4];body.hp=m.hp;body.hp0=m.hp;Composite.add(world,body);}
+  S.pigs=0;for(const p of L.pigs){const body=Bodies.circle(p[0],p[1],14,{density:0.001,friction:0.6,restitution:0.2,label:'pig'});body.hp=6;body.hp0=6;Composite.add(world,body);S.pigs++;}
+  S.birdsLeft=L.birds;loadBird();hud();
+}
+function loadBird(){
+  if(S.birdsLeft<=0){S.bird=null;return;}
+  S.birdsLeft--;const b=Bodies.circle(REST.x,REST.y,12,{density:0.004,restitution:0.45,friction:0.7,label:'bird',isStatic:true});
+  S.bird=b;S.flying=false;S.flyT=0;Composite.add(world,b);hud();
+}
+function hud(){$('#lvl').textContent=S.lvl+1;$('#score').textContent=S.score;$('#birdsLeft').textContent='●'.repeat(S.birdsLeft+(S.bird&&!S.flying?1:0))||'○';}
+Events.on(engine,'collisionStart',ev=>{
+  for(const pr of ev.pairs){const a=pr.bodyA,b=pr.bodyB;const rel=Vector.magnitude(Vector.sub(a.velocity,b.velocity));if(rel<1.6)continue;hit(a,rel,b);hit(b,rel,a);}
+});
+function hit(body,rel,other){
+  if(body.hp==null||body.dead)return;
+  const k=other.label==='bird'?1.0:(other.label==='ground'||other.label==='wall'?0.45:0.7);
+  body.hp-=rel*k;if(body.hp<=0)destroy(body);
+}
+function destroy(body){
+  body.dead=true;Composite.remove(world,body);const p=body.position;
+  if(body.label==='pig'){S.pigs--;S.score+=5000;fx.pop('+5000',p.x,p.y-20,'#fff',16);fx.burst(p.x,p.y,'#7bd36b',14,90,3);}
+  else{S.score+=500;fx.pop('+500',p.x,p.y-16,'#ffe8a0',12);fx.burst(p.x,p.y,MAT[body.mat].fill,10,70,3);}
+  hud();
+}
+function update(dt){
+  S.acc=Math.min(S.acc+dt,0.1);
+  while(S.acc>=1/60){Engine.update(engine,1000/60);S.acc-=1/60;}
+  fx.update(dt,400);
+  if(S.over)return;
+  if(S.flying&&S.bird){
+    S.flyT+=dt;const b=S.bird;
+    const stopped=b.speed<0.25&&S.flyT>1.2;const out=b.position.y>H0+60||b.position.x>W0+40||b.position.x<-40;
+    if(stopped||out||S.flyT>7){Composite.remove(world,b);S.bird=null;S.flying=false;if(S.pigs>0){if(S.birdsLeft>0)loadBird();else{S.over=true;setTimeout(fail,400);}}}
+  }
+  if(S.pigs<=0&&!S.over){S.over=true;setTimeout(win,900);}
+}
+function win(){
+  const bonus=(S.birdsLeft+(S.bird&&!S.flying?1:0))*5000;S.score+=bonus;hud();
+  const prev=prog.done[S.lvl];if(prev==null||S.score>prev)prog.done[S.lvl]=S.score;store.set('aigame.birds.prog',prog);
+  const last=S.lvl>=LEVELS.length-1;const btns=[];
+  if(!last)btns.push({label:'下一关',primary:true,onClick(){load(S.lvl+1);}});
+  btns.push({label:'重玩',onClick(){load(S.lvl);}});btns.push({label:'选关',onClick(){selectDialog();}});
+  S.modal=()=>dialog(overlay,{title:last?'全部通关!':'第 '+(S.lvl+1)+' 关 通过!',lines:['得分 '+S.score+(bonus?' (剩余小鸟 +'+bonus+')':''),'本关最高 '+prog.done[S.lvl]],buttons:btns});S.modal();
+}
+function fail(){
+  S.modal=()=>dialog(overlay,{title:'小鸟用完了',lines:['还剩 '+S.pigs+' 只猪','得分 '+S.score],buttons:[{label:'再试一次',primary:true,onClick(){load(S.lvl);}},{label:'选关',onClick(){selectDialog();}}]});S.modal();
+}
+function selectDialog(){
+  S.modal=selectDialog;
+  dialog(overlay,{title:'选择关卡',build(d){const grid=document.createElement('div');grid.className='lvgrid';
+    LEVELS.forEach((L,i)=>{const b=document.createElement('button');b.innerHTML=(i+1)+(prog.done[i]!=null?'<small>'+prog.done[i]+'</small>':'');if(prog.done[i]!=null)b.classList.add('done');if(i===S.lvl)b.classList.add('cur');b.addEventListener('click',()=>{closeDialog(overlay);load(i);});grid.appendChild(b);});
+    d.appendChild(grid);},buttons:[{label:'关闭',onClick(){S.modal=null;}}]});
+}
+/* 输入:拉弓 */
+function toWorld(p){return {x:(p.x-ox)/sc,y:(p.y-oy)/sc};}
+cv.addEventListener('pointerdown',e=>{
+  if(S.modal||S.over)return;e.preventDefault();hint.hidden=true;
+  if(!S.bird||S.flying)return;const p=toWorld(pointerPos(cv,e));
+  if(Math.hypot(p.x-REST.x,p.y-REST.y)<70){S.drag={id:e.pointerId};try{cv.setPointerCapture(e.pointerId);}catch(err){}dragTo(p);}
+});
+cv.addEventListener('pointermove',e=>{if(!S.drag||!S.bird||S.flying)return;dragTo(toWorld(pointerPos(cv,e)));});
+function dragTo(p){
+  let dx=p.x-REST.x,dy=p.y-REST.y;const d=Math.hypot(dx,dy);if(d>PULL){dx*=PULL/d;dy*=PULL/d;}
+  Body.setPosition(S.bird,{x:REST.x+dx,y:REST.y+dy});
+}
+function release(){
+  if(!S.drag)return;S.drag=null;const b=S.bird;if(!b||S.flying)return;
+  const dx=REST.x-b.position.x,dy=REST.y-b.position.y;
+  if(Math.hypot(dx,dy)<8){Body.setPosition(b,REST);return;}
+  Body.setStatic(b,false);Body.setVelocity(b,{x:dx*0.2,y:dy*0.2});S.flying=true;S.flyT=0;hud();
+}
+cv.addEventListener('pointerup',release);cv.addEventListener('pointercancel',release);
+/* 绘制 */
+function render(){
+  g.setTransform(1,0,0,1,0,0);
+  const sky=g.createLinearGradient(0,0,0,H);sky.addColorStop(0,'#5fb7ee');sky.addColorStop(1,'#cdeeff');g.fillStyle=sky;g.fillRect(0,0,W,H);
+  g.setTransform(sc,0,0,sc,ox,oy);
+  // 云、远山
+  g.fillStyle='rgba(255,255,255,.85)';for(const c of [[80,60,26],[120,70,20],[300,40,22],[340,50,16],[420,90,20]]){g.beginPath();g.arc(c[0],c[1],c[2],0,6.28);g.fill();}
+  g.fillStyle='#8fcf7a';g.beginPath();g.moveTo(-100,GROUND);g.quadraticCurveTo(80,250,260,GROUND);g.quadraticCurveTo(420,270,640,GROUND);g.fill();
+  g.fillStyle='#6db85a';g.fillRect(-100,GROUND,W0+200,6);g.fillStyle='#a97a44';g.fillRect(-100,GROUND+6,W0+200,H0);
+  // 弹弓
+  g.lineCap='round';g.strokeStyle='#6b4423';g.lineWidth=7;g.beginPath();g.moveTo(SLING.x,SLING.y+45);g.lineTo(SLING.x,SLING.y-30);g.lineTo(SLING.x-10,SLING.y-52);g.moveTo(SLING.x,SLING.y-30);g.lineTo(SLING.x+10,SLING.y-52);g.stroke();
+  const bodies=Composite.allBodies(world);
+  const b=S.bird;
+  if(b&&!S.flying&&S.drag){g.strokeStyle='#3a2410';g.lineWidth=4;g.beginPath();g.moveTo(SLING.x-10,SLING.y-52);g.lineTo(b.position.x,b.position.y);g.lineTo(SLING.x+10,SLING.y-52);g.stroke();
+    const vx=(REST.x-b.position.x)*0.2,vy=(REST.y-b.position.y)*0.2;g.fillStyle='rgba(255,255,255,.7)';for(let t=4;t<=70;t+=6){const x=b.position.x+vx*t,y=b.position.y+vy*t+0.5*0.278*t*t;if(y>GROUND)break;g.beginPath();g.arc(x,y,2.2,0,6.28);g.fill();}}
+  for(const body of bodies){
+    if(body.isStatic&&body.label!=='bird')continue;
+    g.save();g.translate(body.position.x,body.position.y);g.rotate(body.angle);
+    if(body.label==='block'){const m=MAT[body.mat];const v=body.vertices;const w=Math.hypot(v[1].x-v[0].x,v[1].y-v[0].y),h=Math.hypot(v[2].x-v[1].x,v[2].y-v[1].y);
+      g.fillStyle=m.fill;g.fillRect(-w/2,-h/2,w,h);g.lineWidth=2;g.strokeStyle=m.line;g.strokeRect(-w/2,-h/2,w,h);
+      if(body.mat==='wood'){g.strokeStyle='rgba(0,0,0,.18)';g.lineWidth=1;for(let i=1;i<3;i++){g.beginPath();if(w>h){g.moveTo(-w/2,-h/2+h*i/3);g.lineTo(w/2,-h/2+h*i/3);}else{g.moveTo(-w/2+w*i/3,-h/2);g.lineTo(-w/2+w*i/3,h/2);}g.stroke();}}
+      if(body.hp<body.hp0*0.5){g.strokeStyle='rgba(0,0,0,.6)';g.lineWidth=1.5;g.beginPath();g.moveTo(-w*0.3,-h*0.4);g.lineTo(0,0);g.lineTo(w*0.25,h*0.35);g.moveTo(0,0);g.lineTo(w*0.3,-h*0.2);g.stroke();}
+    }else if(body.label==='pig'){const r=14;g.fillStyle='#7bd36b';g.beginPath();g.arc(0,0,r,0,6.28);g.fill();g.lineWidth=2;g.strokeStyle='#2f6b2a';g.stroke();
+      g.fillStyle='#5cb84e';g.beginPath();g.ellipse(0,3,7,5,0,0,6.28);g.fill();g.stroke();g.fillStyle='#2f6b2a';g.beginPath();g.arc(-2.5,3,1.3,0,6.28);g.arc(2.5,3,1.3,0,6.28);g.fill();
+      g.fillStyle='#fff';g.beginPath();g.arc(-5,-4,3,0,6.28);g.arc(5,-4,3,0,6.28);g.fill();g.fillStyle='#111';g.beginPath();g.arc(-4.5,-4,1.4,0,6.28);g.arc(5.5,-4,1.4,0,6.28);g.fill();
+      g.fillStyle='#7bd36b';g.beginPath();g.ellipse(-9,-11,3.5,4,-0.4,0,6.28);g.ellipse(9,-11,3.5,4,0.4,0,6.28);g.fill();g.stroke();
+    }else if(body.label==='bird'){const r=12;g.fillStyle='#e0322b';g.beginPath();g.arc(0,0,r,0,6.28);g.fill();g.lineWidth=2;g.strokeStyle='#6b100c';g.stroke();
+      g.fillStyle='#f6d9b5';g.beginPath();g.ellipse(0,5,6,4.5,0,0,6.28);g.fill();
+      g.fillStyle='#fff';g.beginPath();g.arc(-4,-2,3.2,0,6.28);g.arc(4,-2,3.2,0,6.28);g.fill();g.fillStyle='#111';g.beginPath();g.arc(-3,-2,1.5,0,6.28);g.arc(5,-2,1.5,0,6.28);g.fill();
+      g.strokeStyle='#111';g.lineWidth=2.2;g.beginPath();g.moveTo(-8,-7);g.lineTo(-1,-4);g.moveTo(8,-7);g.lineTo(1,-4);g.stroke();
+      g.fillStyle='#f5a623';g.beginPath();g.moveTo(3,1);g.lineTo(13,4);g.lineTo(3,7);g.closePath();g.fill();g.strokeStyle='#8a5a10';g.lineWidth=1.2;g.stroke();
+      g.fillStyle='#e0322b';g.beginPath();g.moveTo(-3,-11);g.lineTo(-6,-18);g.lineTo(0,-13);g.lineTo(2,-19);g.lineTo(3,-11);g.closePath();g.fill();
+    }
+    g.restore();
+  }
+  // 候场的小鸟
+  for(let i=0;i<S.birdsLeft;i++){g.fillStyle='#e0322b';g.beginPath();g.arc(50-i*22,GROUND-10,9,0,6.28);g.fill();g.lineWidth=1.5;g.strokeStyle='#6b100c';g.stroke();}
+  fx.draw(g,1);
+}
+$('#btnRestart').addEventListener('click',()=>load(S.lvl));
+$('#btnSelect').addEventListener('click',()=>{if(!S.modal)selectDialog();});
+resize();watchResize(stage,resize);
+load(clamp(prog.cur||0,0,LEVELS.length-1));
+Shell.makeLoop(dt=>{if(!S.modal)update(dt);render();}).start();
+})();
+</script>
+</body>
+</html>

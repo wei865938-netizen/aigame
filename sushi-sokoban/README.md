@@ -1,19 +1,46 @@
-# 寿司消消乐 · 推箱子
+# AIGAME 游戏机
 
-两个复古像素风的手机小游戏,一个网页文件,点链接就能玩,不用安装。
+一套手机点开就玩的网页小游戏,不用安装。整个 `Desktop\aigame` 文件夹就是 GitHub 仓库 `wei865938-netizen/aigame` 的工作目录,推上去就是线上版本。
 
-## 直接玩
+## 直接玩(发朋友用这个)
 
-- **发朋友用这个**(GitHub Pages,公开仓库 wei865938-netizen/aigame,2026-09-03 上线):
-  https://wei865938-netizen.github.io/aigame/sushi-sokoban/
-  游戏机首页(以后加的游戏都列在这):https://wei865938-netizen.github.io/aigame/
-- Claude Artifact 备用链接:https://claude.ai/code/artifact/8958317b-4388-4507-9910-3a30e203d196 (默认私密,要在分享菜单里开放;国内经常打不开)
-- 电脑上直接双击 `index.html` 也能玩(推箱子支持键盘方向键、Z 撤销、R 重开)。
-- 直达某个游戏:链接后面加 `#sushi` 或 `#sokoban`。
+- 游戏机首页(所有游戏都在这):https://wei865938-netizen.github.io/aigame/
+- 单个游戏直达:
+  - 寿司消消乐 · 推箱子:https://wei865938-netizen.github.io/aigame/sushi-sokoban/
+  - 水果忍者:https://wei865938-netizen.github.io/aigame/fruit/
+  - 愤怒的小鸟:https://wei865938-netizen.github.io/aigame/birds/
+  - 神庙逃亡:https://wei865938-netizen.github.io/aigame/temple/
+  - 滑雪大冒险:https://wei865938-netizen.github.io/aigame/ski/
+  - 割绳子:https://wei865938-netizen.github.io/aigame/rope/
+- 电脑上双击任意 `index.html` 也能玩(有键盘操作)。
+- Claude Artifact 备用链接(只有寿司+推箱子,国内经常打不开):https://claude.ai/code/artifact/8958317b-4388-4507-9910-3a30e203d196
+
+## 目录
+
+```
+aigame/
+  index.html          游戏机首页(游戏列表)
+  common/shell.css    公共壳:手机机身、HUD、软键、对话框
+  common/shell.js     公共工具:存档、对话框、画布适配、主循环、特效
+  common/matter.min.js  Matter.js 0.20 物理引擎(愤怒的小鸟用,已下载到本地)
+  sushi-sokoban/      寿司消消乐 + 推箱子(单文件,像素风)
+  fruit/  birds/  temple/  ski/  rope/   其余五个游戏,各一个 index.html
+  sushi-sokoban/tools/  校验脚本(见下)
+```
+
+## 玩法
+
+- **寿司消消乐**:8×8、6 种寿司,点两个相邻的交换或直接滑动,三连消除;分数到目标过关,时间条走完结束,消除补时间,提示条蓄满自动指路。
+- **推箱子**:34 关由易到难,滑动或按方向键走,按住连续走,中间键撤销,支持选关,进度自动存。
+- **水果忍者**:手指划过水果切开,一刀 3 个以上有连斩加分,切到炸弹结束,漏掉 3 个结束。
+- **愤怒的小鸟**:按住小鸟往后拉、松手发射,打倒所有绿猪过关;木头、玻璃、石头硬度不同;5 关。
+- **神庙逃亡**:三条道跑酷,左右滑换道、上滑跳过木栏、下滑铲过横梁、金币 +10,越跑越快。
+- **滑雪大冒险**:按住起跳,空中按住后空翻(每圈 +100),落地角度太歪会摔,雪崩追上就结束;石头要跳过。
+- **割绳子**:划过绳子割断,让糖果落进小怪兽嘴里,顺路吃星星;泡泡会带着糖果上浮,点一下戳破;12 关。
 
 ## 更新线上版本
 
-改完 `index.html` 后,在 `Desktop\aigame` 目录里:
+改完文件后,在 `Desktop\aigame` 目录里:
 
 ```
 git add -A
@@ -23,34 +50,21 @@ git push
 
 推上去一两分钟后 GitHub Pages 自动刷新。
 
-## 自己托管(给国内朋友用)
-
-`index.html` 是单文件、零外部依赖,放到任何静态托管上都能跑,任选一种:
-
-1. **Gitee Pages**:新建仓库 → 上传 `index.html` → 服务 → Gitee Pages → 启动(需要实名认证)。
-2. **腾讯云 COS / 阿里云 OSS**:建一个公开读的桶 → 上传 `index.html` → 开启"静态网站"功能 → 用它给的访问地址。
-3. **Vercel / Netlify**(国外,偶尔慢):把文件夹拖进 Netlify Drop 或 Vercel 即可。
-
-拿到 `https://.../index.html` 之后,直接把链接发到微信,朋友在微信内置浏览器里就能玩。
-
-## 玩法
-
-- **寿司消消乐**:8×8 盘面、6 种寿司。点两个相邻寿司交换,或直接滑动。三个同款连成一线消除;分数到达目标过关;时间条走完结束,每次消除补时间;提示条闲置 8 秒蓄满会自动指路,也可以按"提示"。最高分记在本机。
-- **推箱子**:34 关由易到难(第 1 关是照着老手机那关做的十字形)。滑动或按方向键走,方向键按住连续走,中间键撤销(无限次),支持选关,通关和最佳步数自动保存。
-
-## 已知限制
-
-- 记录只存在当前手机的浏览器里(localStorage),换手机、清缓存会丢。
-- 不要用微信直接发 `.html` 文件:iOS 的预览不跑脚本,打不开游戏。要发链接。
-- 没有音效。
-
-## 开发 / 校验
+## 校验脚本(在 sushi-sokoban 目录下运行)
 
 ```
 node tools/test-match3.mjs      # 消消乐引擎 + 像素贴图校验(1000 局随机)
 node tools/solve.mjs            # 推箱子全关卡求解,任一关无解则报错
-node tools/solve.mjs --write    # 按难度重排关卡并写回 index.html(第 1 关固定)
-node tools/build-artifact.mjs <输出路径>   # 切出 Artifact 用的页面片段
+node tools/solve.mjs --write    # 按难度重排关卡并写回(第 1 关固定)
+node tools/test-rope.mjs        # 割绳子全关卡穷举割绳时机,确认每关都进得了嘴
+node tools/build-artifact.mjs <输出路径>   # 切出寿司+推箱子的 Artifact 片段
 ```
 
-加关卡:在 `index.html` 的 `/*LEVELS-START*/ … /*LEVELS-END*/` 里按 XSB 格式追加(`#` 墙 `.` 目标 `$` 箱 `*` 箱在目标 `@` 人),然后跑 `solve.mjs` 确认可解。
+加推箱子关卡:在 `sushi-sokoban/index.html` 的 `/*LEVELS-START*/ … /*LEVELS-END*/` 里按 XSB 格式追加,跑 `solve.mjs`。
+加割绳子关卡:在 `rope/index.html` 的 `/*ROPE-LEVELS-START*/ … /*ROPE-LEVELS-END*/` 里追加(逻辑坐标 360×560),跑 `test-rope.mjs`。
+
+## 已知限制
+
+- 记录只存在当前手机的浏览器里(localStorage),换手机、清缓存会丢。
+- 不要用微信直接发 `.html` 文件:iOS 的预览不跑脚本。要发链接。
+- 没有音效。

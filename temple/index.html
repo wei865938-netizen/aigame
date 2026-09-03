@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#2b2926">
+<title>神庙逃亡</title>
+<link rel="stylesheet" href="../common/shell.css">
+</head>
+<body>
+<div id="phone"><div id="screen">
+<div class="hud"><span><b id="dist">0</b> m</span><span style="color:#c98a00">◉ <b id="coins">0</b></span><span>最高 <b id="best">0</b></span></div>
+<div class="stage" id="stage"><canvas id="cv"></canvas><div class="hint" id="hint">点一下开跑 · 左右滑换道 · 上滑跳 · 下滑铲</div></div>
+<div class="softkeys"><button id="btnPause">暂停</button><button id="btnRestart">重开</button><button data-go="../index.html">返回</button></div>
+<div class="overlay" id="overlay" hidden></div>
+</div></div>
+<script src="../common/shell.js"></script>
+<script>
+(function(){
+'use strict';
+const {$,clamp,rand,lerp,store,fit,watchResize,pointerPos,dialog,closeDialog,bindNav,text,makeFx}=Shell;
+bindNav();
+const cv=$('#cv'),g=cv.getContext('2d'),stage=$('#stage'),overlay=$('#overlay'),hint=$('#hint');
+let W=0,H=0,dpr=1;
+const ZFAR=2600,NEAR=340,JUMP_T=0.72,SLIDE_T=0.7;
+const fx=makeFx();
+const S={state:'ready',t:0,speed:0,dist:0,coins:0,best:store.get('aigame.temple.best',0),lane:1,laneX:1,jumpT:-1,slideT:-1,objs:[],nextZ:700,scroll:0,runT:0,modal:null,sw:null,fall:0};
+function resize(){const f=fit(cv,stage);W=f.w;H=f.h;dpr=f.dpr;}
+const proj=z=>NEAR/(NEAR+Math.max(-NEAR*0.7,z));
+const horizon=()=>H*0.38,groundY=()=>H*0.9,laneGap=()=>W*0.3,halfW=()=>W*0.55;
+function reset(){S.t=0;S.speed=0;S.dist=0;S.coins=0;S.lane=1;S.laneX=1;S.jumpT=-1;S.slideT=-1;S.objs=[];S.nextZ=700;S.scroll=0;S.runT=0;S.fall=0;fx.clear();hud();}
+function start(){reset();S.state='play';hint.hidden=true;}
+function hud(){$('#dist').textContent=Math.floor(S.dist);$('#coins').textContent=S.coins;$('#best').textContent=Math.max(S.best,score());}
+const score=()=>Math.floor(S.dist)+S.coins*10;
+function spawn(){
+  while(S.nextZ<ZFAR){
+    const z=S.nextZ,r=Math.random(),open=Math.floor(Math.random()*3);let extra=0;
+    if(r<0.28){const lanes=[0,1,2].filter(l=>l!==open);const n=Math.random()<0.5?1:2;for(let i=0;i<n;i++)S.objs.push({type:'low',lane:lanes[i],z});if(Math.random()<0.5)for(let i=0;i<4;i++)S.objs.push({type:'coin',lane:lanes[0],z:z-90+i*60,hi:true});}
+    else if(r<0.46){for(const l of [0,1,2])S.objs.push({type:'high',lane:l,z});}
+    else if(r<0.72){for(const l of [0,1,2])if(l!==open)S.objs.push({type:'wall',lane:l,z});}
+    else{const l=Math.floor(Math.random()*3);for(let i=0;i<6;i++)S.objs.push({type:'coin',lane:l,z:z+i*70});extra=380;}
+    S.nextZ=z+rand(430,700)+extra-Math.min(150,S.t*4);
+  }
+}
+const jumpH=()=>S.jumpT>=0?Math.sin(Math.PI*S.jumpT/JUMP_T):0;
+function update(dt){
+  if(S.state!=='play')return;
+  S.t+=dt;S.speed=700+Math.min(1200,S.t*30);
+  const dz=S.speed*dt;S.dist+=dz/100;S.scroll=(S.scroll+dz)%140;S.runT+=dt*S.speed/260;
+  S.laneX=lerp(S.laneX,S.lane,Math.min(1,dt*12));
+  if(S.jumpT>=0){S.jumpT+=dt;if(S.jumpT>JUMP_T)S.jumpT=-1;}
+  if(S.slideT>=0){S.slideT+=dt;if(S.slideT>SLIDE_T)S.slideT=-1;}
+  for(const o of S.objs)o.z-=dz;S.nextZ-=dz;
+  S.objs=S.objs.filter(o=>o.z>-160&&!o.taken);
+  spawn();
+  const lane=Math.round(S.laneX);
+  for(const o of S.objs){
+    if(o.taken||o.z>45||o.z<-45||o.lane!==lane)continue;
+    if(o.type==='coin'){if(!o.hi||jumpH()>0.3){o.taken=true;S.coins++;fx.pop('+10',W/2+(S.laneX-1)*laneGap(),groundY()-H*0.25,'#ffd23f',18*dpr);hud();}}
+    else if(o.type==='low'){if(jumpH()<0.35)die(o);}
+    else if(o.type==='high'){if(S.slideT<0)die(o);}
+    else die(o);
+  }
+  fx.update(dt,0);
+  if(Math.floor(S.dist)%1===0)hud();
+}
+function die(o){
+  S.state='over';const sc=score();if(sc>S.best){S.best=sc;store.set('aigame.temple.best',S.best);}hud();
+  fx.burst(W/2+(S.laneX-1)*laneGap(),groundY()-H*0.1,'#ffb385',16,H*0.3,4*dpr);
+  const what=o.type==='low'?'被木栏绊倒了':o.type==='high'?'撞到横梁了':'撞墙了';
+  S.modal=()=>dialog(overlay,{title:what,lines:['跑了 '+Math.floor(S.dist)+' 米 · 金币 '+S.coins,'得分 '+sc+' · 最高 '+S.best],buttons:[{label:'再跑一次',primary:true,onClick(){S.modal=null;start();}},{label:'返回',onClick(){location.href='../index.html';}}]});
+  setTimeout(()=>{if(S.state==='over')S.modal();},500);
+}
+function pause(){
+  if(S.state!=='play'||S.modal)return;
+  S.modal=()=>dialog(overlay,{title:'暂停',lines:[Math.floor(S.dist)+' 米 · 金币 '+S.coins],buttons:[{label:'继续',primary:true,onClick(){S.modal=null;}},{label:'重开',onClick(){S.modal=null;start();}},{label:'返回',onClick(){location.href='../index.html';}}]});S.modal();
+}
+function input(dir){ // 0上 1右 2下 3左
+  if(S.state!=='play')return;
+  if(dir===3)S.lane=clamp(S.lane-1,0,2);else if(dir===1)S.lane=clamp(S.lane+1,0,2);
+  else if(dir===0){if(S.jumpT<0&&S.slideT<0)S.jumpT=0;}else if(dir===2){if(S.slideT<0&&S.jumpT<0)S.slideT=0;}
+}
+cv.addEventListener('pointerdown',e=>{if(S.modal)return;e.preventDefault();if(S.state!=='play'){if(S.state==='ready'||S.state==='over')start();return;}S.sw={x:e.clientX,y:e.clientY,done:false};try{cv.setPointerCapture(e.pointerId);}catch(err){}});
+cv.addEventListener('pointermove',e=>{const s=S.sw;if(!s||s.done)return;const dx=e.clientX-s.x,dy=e.clientY-s.y;if(Math.max(Math.abs(dx),Math.abs(dy))<22)return;s.done=true;input(Math.abs(dx)>Math.abs(dy)?(dx>0?1:3):(dy>0?2:0));});
+const end=()=>{S.sw=null;};cv.addEventListener('pointerup',end);cv.addEventListener('pointercancel',end);
+document.addEventListener('keydown',e=>{const m={ArrowUp:0,ArrowRight:1,ArrowDown:2,ArrowLeft:3,w:0,d:1,s:2,a:3,' ':0};if(e.key in m){e.preventDefault();if(S.state!=='play'&&!S.modal)start();else input(m[e.key]);}});
+/* 绘制 */
+function laneX(lane,p){return W/2+(lane-1)*laneGap()*p;}
+function render(){
+  g.setTransform(1,0,0,1,0,0);const hy=horizon(),gy=groundY();
+  const sky=g.createLinearGradient(0,0,0,hy);sky.addColorStop(0,'#1d3550');sky.addColorStop(1,'#f0a65a');g.fillStyle=sky;g.fillRect(0,0,W,hy+2);
+  // 远处神庙剪影
+  g.fillStyle='#2d3b2e';for(const t of [[0.12,0.22,0.16],[0.32,0.3,0.1],[0.5,0.42,0.14],[0.7,0.26,0.12],[0.9,0.34,0.18]]){const x=t[0]*W,h=t[1]*H*0.5,w=t[2]*W;g.beginPath();g.moveTo(x-w/2,hy);g.lineTo(x-w/4,hy-h*0.6);g.lineTo(x,hy-h);g.lineTo(x+w/4,hy-h*0.6);g.lineTo(x+w/2,hy);g.closePath();g.fill();}
+  // 地面与路
+  g.fillStyle='#3d5a36';g.fillRect(0,hy,W,H-hy);
+  const hw0=halfW(),pf=proj(ZFAR);
+  g.fillStyle='#a08a5a';g.beginPath();g.moveTo(W/2-hw0,gy+H*0.2);g.lineTo(W/2-hw0*pf,hy);g.lineTo(W/2+hw0*pf,hy);g.lineTo(W/2+hw0,gy+H*0.2);g.closePath();g.fill();
+  // 石板横线
+  g.strokeStyle='rgba(60,40,20,.45)';
+  for(let z=-S.scroll;z<ZFAR;z+=140){const p=proj(z);if(p<=0)continue;const y=hy+(gy-hy)*p;g.lineWidth=Math.max(1,3*p*dpr);g.beginPath();g.moveTo(W/2-hw0*p,y);g.lineTo(W/2+hw0*p,y);g.stroke();}
+  // 车道线
+  g.strokeStyle='rgba(255,240,200,.35)';g.lineWidth=2*dpr;for(const k of [-0.5,0.5]){g.beginPath();g.moveTo(W/2+k*laneGap(),gy+H*0.2);g.lineTo(W/2+k*laneGap()*pf,hy);g.stroke();}
+  // 两侧石柱(远到近)
+  for(let z=ZFAR-(S.scroll*3%420);z>-200;z-=420){const p=proj(z);const y=hy+(gy-hy)*p;const ph=H*0.42*p,pw=W*0.07*p;for(const side of [-1,1]){const x=W/2+side*hw0*1.12*p;g.fillStyle='#7e6a44';g.fillRect(x-pw/2,y-ph,pw,ph);g.fillStyle='#5a4a30';g.fillRect(x-pw*0.75,y-ph-pw*0.4,pw*1.5,pw*0.45);g.fillStyle='#4f7a3a';g.fillRect(x-pw*0.45,y-ph*0.6,pw*0.9,ph*0.08);}}
+  // 雾
+  const fog=g.createLinearGradient(0,hy,0,hy+H*0.18);fog.addColorStop(0,'rgba(240,200,140,.75)');fog.addColorStop(1,'rgba(240,200,140,0)');g.fillStyle=fog;g.fillRect(0,hy,W,H*0.18);
+  // 物件
+  const objs=S.objs.slice().sort((a,b)=>b.z-a.z);
+  for(const o of objs){
+    const p=proj(o.z);if(p<=0)continue;const x=laneX(o.lane,p),y=hy+(gy-hy)*p;const lw=laneGap()*0.8*p;
+    if(o.type==='coin'){const r=W*0.032*p;const yy=y-H*0.08*p-(o.hi?H*0.12*p:0)-Math.sin(S.t*6+o.z*0.01)*3*dpr*p;g.fillStyle='#f5c518';g.beginPath();g.arc(x,yy,r,0,6.28);g.fill();g.lineWidth=Math.max(1,r*0.18);g.strokeStyle='#a87a00';g.stroke();g.beginPath();g.arc(x,yy,r*0.55,0,6.28);g.stroke();}
+    else if(o.type==='low'){const h=H*0.07*p;g.fillStyle='#8a5a2b';Shell.rr(g,x-lw/2,y-h,lw,h,h*0.3);g.fill();g.lineWidth=2*dpr*p;g.strokeStyle='#3d2510';g.stroke();g.strokeStyle='rgba(0,0,0,.25)';g.beginPath();g.moveTo(x-lw/2,y-h/2);g.lineTo(x+lw/2,y-h/2);g.stroke();}
+    else if(o.type==='high'){const h=H*0.05*p,top=y-H*0.3*p;g.fillStyle='#6e4a25';g.fillRect(x-lw/2,top-h,lw,h);g.lineWidth=2*dpr*p;g.strokeStyle='#2e1a08';g.strokeRect(x-lw/2,top-h,lw,h);if(o.lane!==1){const sx=o.lane===0?x-lw/2:x+lw/2;g.fillStyle='#5a3d1c';g.fillRect(sx-lw*0.06,top,lw*0.12,y-top);}}
+    else{const h=H*0.3*p;g.fillStyle='#8f9aa3';g.fillRect(x-lw/2,y-h,lw,h);g.lineWidth=2*dpr*p;g.strokeStyle='#3b444c';g.strokeRect(x-lw/2,y-h,lw,h);g.strokeStyle='rgba(0,0,0,.25)';for(let i=1;i<4;i++){g.beginPath();g.moveTo(x-lw/2,y-h*i/4);g.lineTo(x+lw/2,y-h*i/4);g.stroke();}}
+  }
+  drawRunner();
+  fx.draw(g,1);
+  if(S.state==='ready'){text(g,'神庙逃亡',W/2,H*0.5,Math.min(W,H)*0.13,'#fff','#2a1a08');text(g,'TEMPLE RUN',W/2,H*0.5+Math.min(W,H)*0.1,Math.min(W,H)*0.045,'#ffd27a','#2a1a08');}
+}
+function drawRunner(){
+  const x=laneX(S.laneX,1),gy=groundY();const sz=H*0.11;const jh=jumpH();const y=gy-jh*H*0.18;
+  const slide=S.slideT>=0;const run=Math.sin(S.runT);
+  g.save();g.translate(x,y);
+  g.fillStyle='rgba(0,0,0,.25)';g.beginPath();g.ellipse(0,0,sz*0.45*(1-jh*0.4),sz*0.12*(1-jh*0.4),0,0,6.28);g.fill();
+  if(slide)g.scale(1.25,0.55);
+  g.lineCap='round';g.lineWidth=sz*0.14;g.strokeStyle='#4a2c15';
+  // 腿
+  g.beginPath();g.moveTo(-sz*0.12,-sz*0.5);g.lineTo(-sz*0.12+run*sz*0.2,jh>0?-sz*0.25:0);g.moveTo(sz*0.12,-sz*0.5);g.lineTo(sz*0.12-run*sz*0.2,jh>0?-sz*0.25:0);g.stroke();
+  // 身体
+  g.fillStyle='#d8843a';Shell.rr(g,-sz*0.22,-sz*0.95,sz*0.44,sz*0.5,sz*0.1);g.fill();g.lineWidth=2*dpr;g.strokeStyle='#4a2c15';g.stroke();
+  // 手臂
+  g.lineWidth=sz*0.12;g.beginPath();g.moveTo(-sz*0.22,-sz*0.85);g.lineTo(-sz*0.35,-sz*0.85-run*sz*0.25);g.moveTo(sz*0.22,-sz*0.85);g.lineTo(sz*0.35,-sz*0.85+run*sz*0.25);g.stroke();
+  // 头
+  g.fillStyle='#f2c9a0';g.beginPath();g.arc(0,-sz*1.15,sz*0.2,0,6.28);g.fill();g.lineWidth=2*dpr;g.stroke();
+  g.fillStyle='#c0392b';g.beginPath();g.arc(0,-sz*1.22,sz*0.21,Math.PI,0);g.fill();
+  g.restore();
+}
+$('#btnPause').addEventListener('click',pause);
+$('#btnRestart').addEventListener('click',()=>{closeDialog(overlay);S.modal=null;start();});
+document.addEventListener('visibilitychange',()=>{if(document.hidden)pause();});
+resize();watchResize(stage,resize);hud();
+Shell.makeLoop(dt=>{if(!S.modal)update(dt);render();}).start();
+if(location.hash==='#auto')start();
+})();
+</script>
+</body>
+</html>
