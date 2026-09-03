@@ -1,0 +1,1112 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#2b2926">
+<title>寿司消消乐·推箱子</title>
+</head>
+<body>
+<!--ARTIFACT-START-->
+<style>
+:root{
+  --lcd:#f7e7b2;--lcd-deep:#eed58f;--lcd-card:#fff8dd;
+  --ink:#4a2c15;--ink-soft:#8a6a45;
+  --accent:#f08a3c;--green:#2e7d4f;--green-light:#6fcf8a;--red:#d9453a;--red-light:#ff8a7a;
+  --bezel:#2b2926;--bezel-hi:#3a3734;
+  --font-cn:"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC",system-ui,sans-serif;
+  --font-mono:ui-monospace,"SF Mono",Menlo,Consolas,"Courier New",monospace;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0;height:100%}
+body{background:var(--bezel);color:var(--ink);font-family:var(--font-cn);font-size:14px;line-height:1.4;overscroll-behavior:none;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none;touch-action:manipulation;-webkit-text-size-adjust:100%}
+button{font-family:inherit}
+button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+#phone{max-width:460px;margin:0 auto;height:100vh;height:100dvh;display:flex;flex-direction:column;padding:8px 8px calc(8px + env(safe-area-inset-bottom))}
+#screen{flex:1;min-height:0;display:flex;flex-direction:column;background:var(--lcd);border:3px solid #17140f;border-radius:12px;box-shadow:inset 0 0 0 2px #7d6440,0 0 0 2px var(--bezel-hi),0 10px 30px rgba(0,0,0,.45);overflow:hidden;position:relative}
+.scr{display:flex;flex-direction:column;height:100%;min-height:0}
+
+/* 状态栏 / 软键 */
+.statusbar{display:flex;align-items:center;justify-content:space-between;padding:6px 10px;background:linear-gradient(#ffd77a,#f0b642);border-bottom:2px solid var(--ink);font-family:var(--font-mono);font-weight:700;letter-spacing:.12em;font-size:13px}
+.sig{display:inline-flex;align-items:flex-end;gap:2px;height:12px}
+.sig i{display:block;width:3px;background:var(--ink)}
+.sig i:nth-child(1){height:4px}.sig i:nth-child(2){height:6px}.sig i:nth-child(3){height:9px}.sig i:nth-child(4){height:12px}
+.bat{display:inline-block;width:22px;height:11px;border:2px solid var(--ink);border-radius:2px;position:relative;padding:1px}
+.bat::before{content:"";display:block;height:100%;width:80%;background:var(--green)}
+.bat::after{content:"";position:absolute;right:-6px;top:1px;width:3px;height:5px;background:var(--ink)}
+.softkeys{display:flex;border-top:2px solid var(--ink);background:var(--lcd-deep);font-family:var(--font-mono);font-weight:700;letter-spacing:.08em;flex:none}
+.softkeys button{flex:1;background:none;border:0;color:var(--ink);font:inherit;padding:11px 8px;font-size:14px;cursor:pointer;min-height:46px}
+.softkeys button+button{border-left:2px solid var(--ink)}
+.softkeys button:active{background:var(--accent);color:#fff}
+
+/* 首页菜单 */
+.menu{flex:1;min-height:0;overflow:auto;padding:14px 12px 10px;display:flex;flex-direction:column;gap:12px}
+.menu h1{margin:2px 0 0;font-size:22px;letter-spacing:.04em;text-wrap:balance;line-height:1.2}
+.menu .lead{margin:0 0 4px;color:var(--ink-soft);font-size:13px;max-width:34em}
+.item{display:grid;grid-template-columns:64px 1fr auto;align-items:center;gap:12px;padding:10px 12px;background:var(--lcd-card);border:2px solid var(--ink);border-radius:8px;box-shadow:3px 3px 0 var(--ink);text-align:left;font:inherit;color:inherit;cursor:pointer;width:100%}
+.item:active{transform:translate(2px,2px);box-shadow:1px 1px 0 var(--ink)}
+.item canvas{width:64px;height:64px;image-rendering:pixelated;display:block}
+.item .t{font-weight:700;font-size:17px;display:block}
+.item .s{color:var(--ink-soft);font-size:12px;margin-top:3px;font-family:var(--font-mono);display:block}
+.item .go{font-family:var(--font-mono);font-weight:700;color:var(--accent);font-size:20px}
+.foot{margin-top:auto;font-family:var(--font-mono);font-size:11px;color:var(--ink-soft);display:flex;justify-content:space-between;padding:0 4px;letter-spacing:.1em}
+
+/* 消消乐 */
+.hud{display:grid;grid-template-columns:1fr 1fr;gap:5px 12px;padding:7px 12px;border-bottom:2px solid var(--ink);background:var(--lcd-deep);font-family:var(--font-mono);font-weight:700;font-size:13px;letter-spacing:.1em;flex:none}
+.hud .f{display:flex;align-items:center;gap:8px;white-space:nowrap}
+.hud .f canvas{display:block}
+.stage{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:6px}
+.stage canvas{display:block;touch-action:none;border:2px solid var(--ink);background:#f9ecc0;image-rendering:pixelated}
+.stage canvas.soko{border:0;background:transparent}
+.bars{padding:6px 12px 8px;display:grid;grid-template-columns:auto 1fr;gap:6px 10px;align-items:center;font-family:var(--font-mono);font-weight:700;font-size:13px;letter-spacing:.3em;flex:none}
+.bar{height:13px;border:2px solid var(--ink);background:#fff;padding:1px}
+.bar i{display:block;height:100%;transition:width .12s linear}
+.bar.time i{background:repeating-linear-gradient(90deg,var(--green) 0 4px,var(--green-light) 4px 6px)}
+.bar.time.low i{background:repeating-linear-gradient(90deg,var(--red) 0 4px,var(--red-light) 4px 6px)}
+.bar.hint i{background:repeating-linear-gradient(90deg,var(--red) 0 4px,var(--red-light) 4px 6px)}
+
+/* 推箱子 */
+.sokohud{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 10px;border-bottom:2px solid var(--ink);background:var(--lcd-deep);font-family:var(--font-mono);font-weight:700;flex:none}
+.lvlnav{display:flex;align-items:center;gap:6px}
+.lvlnav button{width:36px;height:36px;border:2px solid var(--ink);background:var(--lcd-card);border-radius:6px;font:inherit;font-weight:700;font-size:14px;color:var(--ink);box-shadow:2px 2px 0 var(--ink);cursor:pointer}
+.lvlnav button:disabled{opacity:.35;box-shadow:none}
+.lvlnav .n{min-width:74px;text-align:center;line-height:1.15}
+.lvlnav .n b{display:block;font-size:16px}
+.lvlnav .n small{display:block;font-size:11px;color:var(--ink-soft);letter-spacing:.05em;font-weight:400}
+.cnt{font-size:12px;letter-spacing:.05em;text-align:right;line-height:1.5;font-variant-numeric:tabular-nums}
+.pad{display:flex;align-items:center;justify-content:center;gap:14px;padding:8px 8px 10px;border-top:2px solid var(--ink);background:var(--lcd-deep);flex:none}
+.dpad{width:146px;height:146px;border-radius:50%;background:radial-gradient(circle at 40% 35%,#f4f2ec,#b9b5ab 70%,#8d887c);box-shadow:inset 0 2px 4px #fff,inset 0 -3px 6px rgba(0,0,0,.35),0 4px 0 #6f6a60,0 6px 10px rgba(0,0,0,.4);display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);place-items:center;flex:none}
+.dk{border:0;background:none;font-size:18px;color:#3a3734;width:100%;height:100%;font-weight:700;touch-action:none;cursor:pointer;padding:0}
+.dk.up{grid-column:2;grid-row:1}.dk.left{grid-column:1;grid-row:2}.dk.right{grid-column:3;grid-row:2}.dk.down{grid-column:2;grid-row:3}
+.dk.center{grid-column:2;grid-row:2;width:56px;height:56px;border-radius:50%;background:radial-gradient(circle at 40% 35%,#5a5650,#2b2926 70%);color:#f3e2b3;font-size:13px;letter-spacing:.1em;box-shadow:inset 0 1px 2px #8a857c,0 2px 0 #111}
+.dk:active{color:var(--accent)}
+.dk.center:active{transform:translateY(1px);color:var(--accent)}
+.side{display:flex;flex-direction:column;gap:10px;flex:none}
+.side button{width:66px;height:42px;border:2px solid var(--ink);border-radius:8px;background:var(--lcd-card);font:inherit;font-weight:700;color:var(--ink);box-shadow:2px 2px 0 var(--ink);font-family:var(--font-mono);letter-spacing:.1em;font-size:13px;cursor:pointer}
+.side button:active{transform:translate(2px,2px);box-shadow:0 0 0 var(--ink)}
+
+/* 对话框 */
+.overlay{position:absolute;inset:0;background:rgba(74,44,21,.45);display:flex;align-items:center;justify-content:center;padding:20px;z-index:5}
+.dlg{background:var(--lcd);border:3px solid var(--ink);border-radius:10px;box-shadow:4px 4px 0 var(--ink);padding:16px 18px;width:100%;max-width:310px;text-align:center;max-height:100%;overflow:auto}
+.dlg h2{margin:0 0 8px;font-size:20px;letter-spacing:.06em;text-wrap:balance}
+.dlg p{margin:4px 0;font-family:var(--font-mono);font-weight:700;font-size:13px}
+.dlg .txt{text-align:left;font-size:13px;line-height:1.6;margin:6px 0}
+.dlg .txt b{color:var(--accent)}
+.dlg .btns{display:flex;gap:10px;justify-content:center;margin-top:14px;flex-wrap:wrap}
+.dlg button{min-width:96px;padding:10px 14px;border:2px solid var(--ink);border-radius:8px;background:var(--lcd-card);font:inherit;font-weight:700;color:var(--ink);box-shadow:2px 2px 0 var(--ink);cursor:pointer}
+.dlg button.pri{background:var(--accent);color:#fff}
+.dlg button:active{transform:translate(2px,2px);box-shadow:0 0 0 var(--ink)}
+.lvgrid{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;max-height:46vh;overflow:auto;margin-top:8px;padding:2px}
+.lvgrid button{min-width:0;padding:9px 0;font-family:var(--font-mono);font-size:13px;font-variant-numeric:tabular-nums}
+.lvgrid button.done{background:var(--green-light)}
+.lvgrid button.cur{outline:3px solid var(--accent);outline-offset:1px}
+@media (prefers-reduced-motion:reduce){.bar i{transition:none}}
+</style>
+
+<div id="phone"><div id="screen">
+
+<section id="home" class="scr">
+  <div class="statusbar"><span class="sig"><i></i><i></i><i></i><i></i></span><span>游戏</span><span class="bat"></span></div>
+  <div class="menu">
+    <h1>寿司消消乐 · 推箱子</h1>
+    <p class="lead">两个老手机小游戏,点开就玩。进度和最高分记在这台手机的浏览器里。</p>
+    <button class="item" data-go="sushi"><canvas id="icoSushi"></canvas><span><span class="t">寿司消消乐</span><span class="s" id="homeSushiStat">最高分 0</span></span><span class="go">▶</span></button>
+    <button class="item" data-go="sokoban"><canvas id="icoSoko"></canvas><span><span class="t">推箱子</span><span class="s" id="homeSokoStat">已通关 0 关</span></span><span class="go">▶</span></button>
+    <p class="foot"><span>AIGAME</span><span>2026</span></p>
+  </div>
+  <div class="softkeys"><button data-go="sushi">选择</button><button id="homeHelp">玩法</button></div>
+  <div class="overlay" id="homeOverlay" hidden></div>
+</section>
+
+<section id="sushi" class="scr" hidden>
+  <div class="hud">
+    <div class="f">关别<canvas id="sushiLevel"></canvas></div>
+    <div class="f">目标<canvas id="sushiTarget"></canvas></div>
+    <div class="f">分数<canvas id="sushiScore"></canvas></div>
+    <div class="f">最高<canvas id="sushiBest"></canvas></div>
+  </div>
+  <div class="stage" id="sushiStage"><canvas id="sushiCanvas"></canvas></div>
+  <div class="bars"><span>时间</span><div class="bar time" id="sushiTimeWrap"><i id="sushiTimeBar"></i></div><span>提示</span><div class="bar hint"><i id="sushiHintBar"></i></div></div>
+  <div class="softkeys"><button id="sushiHintBtn">提示</button><button id="sushiPauseBtn">暂停</button><button data-go="home">返回</button></div>
+  <div class="overlay" id="sushiOverlay" hidden></div>
+</section>
+
+<section id="sokoban" class="scr" hidden>
+  <div class="sokohud">
+    <div class="lvlnav"><button id="sokoPrev" aria-label="上一关">◀</button><span class="n"><b id="sokoLevelName">第1关</b><small id="sokoLevelSub"></small></span><button id="sokoNext" aria-label="下一关">▶</button></div>
+    <div class="cnt"><div>步数 <span id="sokoMoves">0</span> · 推箱 <span id="sokoPushes">0</span></div><div>最佳 <span id="sokoBest">--</span></div></div>
+  </div>
+  <div class="stage" id="sokoStage"><canvas id="sokoCanvas" class="soko"></canvas></div>
+  <div class="pad">
+    <div class="side"><button id="sokoRestartBtn">重开</button><button id="sokoSelectBtn">选关</button></div>
+    <div class="dpad">
+      <button class="dk up" data-dir="0" aria-label="上">▲</button>
+      <button class="dk left" data-dir="3" aria-label="左">◀</button>
+      <button class="dk center" id="sokoUndoBtn">撤销</button>
+      <button class="dk right" data-dir="1" aria-label="右">▶</button>
+      <button class="dk down" data-dir="2" aria-label="下">▼</button>
+    </div>
+    <div class="side"><button id="sokoHelpBtn">玩法</button><button data-go="home">返回</button></div>
+  </div>
+  <div class="overlay" id="sokoOverlay" hidden></div>
+</section>
+
+</div></div>
+
+<script>
+(function(){
+'use strict';
+const $=s=>document.querySelector(s);
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const easeOut=p=>1-(1-p)*(1-p);
+const easeIn=p=>p*p;
+const MONO='ui-monospace,"SF Mono",Menlo,Consolas,"Courier New",monospace';
+const store={
+  get(k,d){try{const v=localStorage.getItem(k);return v==null?d:JSON.parse(v);}catch(e){return d;}},
+  set(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}}
+};
+const DPR=()=>Math.min(3,window.devicePixelRatio||1);
+
+/* ================= 像素资源 ================= */
+/*SPRITES-START*/
+const PAL={
+  K:'#4a2c15',W:'#fffaf0',w:'#e9dcc6',
+  O:'#f08a3c',o:'#ffb673',R:'#d9453a',r:'#ff8a7a',
+  P:'#ff8fa0',p:'#ffd3da',Y:'#ffd23f',y:'#fff0a8',
+  B:'#213b2c',N:'#2e5a40',G:'#2e7d4f',g:'#6fcf8a',
+  b:'#c07a35',d:'#8a4f1c',t:'#e8b877',
+  S:'#9aa3ad',s:'#c3cbd3',D:'#7b848e',m:'#e8ecef',
+  F:'#f6efdf',f:'#e2d7be',C:'#3f8cd6',
+  X:'#f1c04a',x:'#c98a1f',Z:'#fff3c4'
+};
+const SPR={
+salmon:[
+'................',
+'................',
+'....KKKKKKKK....',
+'..KKooOOOOooKK..',
+'.KoOOOoOOOoOOOK.',
+'.KOOOooOOooOOOK.',
+'.KOOOOOoOOOoOOK.',
+'.KoOOOOOOOOOOoK.',
+'..KKOOOOOOOOKK..',
+'.KWWKKKKKKKKWWK.',
+'.KWwWWWWWWWWwWK.',
+'.KWWwWWWWWWWWWK.',
+'.KWWWWwWWWwWWWK.',
+'..KWWWWWWWWWWK..',
+'...KKKKKKKKKK...',
+'................'],
+maki:[
+'................',
+'.....KKKKKK.....',
+'...KKBBBBBBKK...',
+'..KBBBBBBBBBBK..',
+'.KBBWWWWWWWWBBK.',
+'.KBWWWwWWwWWWBK.',
+'.KBWWWGGGGWWWBK.',
+'.KBWwWGgGGWWwBK.',
+'.KBWWWGGgGWwWBK.',
+'.KBWWWGGGGWWWBK.',
+'.KBWwWWWWWWwWBK.',
+'.KBBWWWWWWWWBBK.',
+'..KBBBBBBBBBBK..',
+'...KKBBBBBBKK...',
+'.....KKKKKK.....',
+'................'],
+onigiri:[
+'................',
+'.......KK.......',
+'......KWWK......',
+'.....KWWWWK.....',
+'.....KWwWWK.....',
+'....KWWWWWWK....',
+'....KWWWWwWK....',
+'...KWWwWWWWWK...',
+'...KWWWWWWWWK...',
+'..KWWWWWWWwWWK..',
+'..KWWwWWWWWWWK..',
+'.KWWWWWWWWWWWWK.',
+'.KWBBBBBBBBBBWK.',
+'.KWBBBBBBBBBBWK.',
+'.KKKKKKKKKKKKKK.',
+'................'],
+ebi:[
+'................',
+'..........KK....',
+'....KKKKKKPPK...',
+'...KPPppPPppPK..',
+'..KPppPPppPPpK..',
+'..KPPppPPppPPK..',
+'..KpPPppPPppKK..',
+'...KKKKKKKKKK...',
+'..KWWWWWWWWWWK..',
+'.KWwWWWWWWWWwWK.',
+'.KWWWWwWWWwWWWK.',
+'.KWWwWWWWWWWWWK.',
+'..KWWWWWWWWWWK..',
+'...KKKKKKKKKK...',
+'................',
+'................'],
+tamago:[
+'................',
+'................',
+'...KKKKKKKKKK...',
+'..KyyYYYYYYyyK..',
+'..KYYYyYYYYYYK..',
+'..KYYYYYYyYYYK..',
+'..KYyYYYYYYYYK..',
+'..KYYYYYYYYyYK..',
+'..KKKKKKKKKKKK..',
+'.KWWWKBBBBKWWWK.',
+'.KWwWKBBBBKWWwK.',
+'.KWWWKBBBBKWwWK.',
+'.KWWwKBBBBKWWWK.',
+'..KWWKBBBBKWWK..',
+'...KKKKKKKKKK...',
+'................'],
+gunkan:[
+'................',
+'.....KKKKKK.....',
+'...KKRrRRrRKK...',
+'..KRrRRrRRRrRK..',
+'..KRRrRRRrRRRK..',
+'.KBKKKKKKKKKKBK.',
+'.KBBBBBBBBBBBBK.',
+'.KBBNBBBBBBNBBK.',
+'.KBBBBBBNBBBBBK.',
+'.KBBBBBBBBBBBBK.',
+'.KBBNBBBBBBBNBK.',
+'.KBBBBBBBBBBBBK.',
+'..KBBBBBBBBBBK..',
+'...KKKKKKKKKK...',
+'................',
+'................'],
+wall:[
+'sSSSSSSmsSSSSSSm',
+'SSSSSSSmSSSSSSSm',
+'DDDDDDDmDDDDDDDm',
+'mmmmmmmmmmmmmmmm',
+'SSSmsSSSSSSmsSSS',
+'SSSmSSSSSSSmSSSS',
+'DDDmDDDDDDDmDDDD',
+'mmmmmmmmmmmmmmmm',
+'sSSSSSSmsSSSSSSm',
+'SSSSSSSmSSSSSSSm',
+'DDDDDDDmDDDDDDDm',
+'mmmmmmmmmmmmmmmm',
+'SSSmsSSSSSSmsSSS',
+'SSSmSSSSSSSmSSSS',
+'DDDmDDDDDDDmDDDD',
+'mmmmmmmmmmmmmmmm'],
+floor:[
+'ffffffffffffffff',
+'fFFFFFFFFFFFFFFF',
+'fFFFFFFFFFFFFFFF',
+'fFFFFFFFFFFFFFFF',
+'fFFFFFFFFFFFFFFF',
+'fFFFFFFFFFFFFFFF',
+'fFFFFFFFFFFFFFFF',
+'fFFFFFFFFFFFFFFF',
+'fFFFFFFFFFFFFFFF',
+'fFFFFFFFFFFFFFFF',
+'fFFFFFFFFFFFFFFF',
+'fFFFFFFFFFFFFFFF',
+'fFFFFFFFFFFFFFFF',
+'fFFFFFFFFFFFFFFF',
+'fFFFFFFFFFFFFFFF',
+'fFFFFFFFFFFFFFFF'],
+target:[
+'ffffffffffffffff',
+'fFFFFFFFFFFFFFFF',
+'fFFFFFFFFFFFFFFF',
+'fFFFFFKKKKFFFFFF',
+'fFFFFKGGGGKFFFFF',
+'fFFFKGgGGgGKFFFF',
+'fFFFKGGGGGGKFFFF',
+'fFFFKGGGGGGKFFFF',
+'fFFFKGgGGgGKFFFF',
+'fFFFFKGGGGKFFFFF',
+'fFFFFFKKKKFFFFFF',
+'fFFFFFFFFFFFFFFF',
+'fFFFFFFFFFFFFFFF',
+'fFFFFFFFFFFFFFFF',
+'fFFFFFFFFFFFFFFF',
+'fFFFFFFFFFFFFFFF'],
+box:[
+'KKKKKKKKKKKKKKKK',
+'KttttttttttttttK',
+'KtbddbbbbbbddbtK',
+'KtbbddbbbbddbbtK',
+'KtbbbddbbddbbbtK',
+'KtbbbbddddbbbbtK',
+'KtbbbbbddbbbbbtK',
+'KtbbbbbddbbbbbtK',
+'KtbbbbddddbbbbtK',
+'KtbbbddbbddbbbtK',
+'KtbbddbbbbddbbtK',
+'KtbddbbbbbbddbtK',
+'KtbbbbbbbbbbbbtK',
+'KttttttttttttttK',
+'KKKKKKKKKKKKKKKK',
+'KKKKKKKKKKKKKKKK'],
+cat:[
+'................',
+'..KK.......KK...',
+'..KWK.....KWK...',
+'..KWWK...KWWK...',
+'..KWWWKKKWWWK...',
+'.KWWWWWWWWWWWK..',
+'.KWWKWWWWWKWWK..',
+'.KWWWWWWWWWWWK..',
+'.KWPWWWKWWWPWK..',
+'.KWWWWKWKWWWWK..',
+'..KWWWWWWWWWK...',
+'...CCCCCCCCC....',
+'..KWWWWWWWWWK...',
+'.KWWWKWWWKWWWK..',
+'.KWWWWWWWWWWWK..',
+'..KKKKKKKKKKK...']
+};
+function recolor(rows,map){return rows.map(r=>r.replace(/./g,ch=>map[ch]||ch));}
+SPR.boxOn=recolor(SPR.box,{b:'X',d:'x',t:'Z'});
+const SUSHI_KINDS=['salmon','maki','onigiri','ebi','tamago','gunkan'];
+const DIGITS={
+'0':['111','101','101','101','111'],'1':['010','110','010','010','111'],
+'2':['111','001','111','100','111'],'3':['111','001','111','001','111'],
+'4':['101','101','111','001','001'],'5':['111','100','111','001','111'],
+'6':['111','100','111','101','111'],'7':['111','001','001','001','001'],
+'8':['111','101','111','101','111'],'9':['111','101','111','001','111'],
+'-':['000','000','111','000','000']};
+/*SPRITES-END*/
+
+const spriteCache=new Map();
+function getSprite(name,k){
+  const key=name+'@'+k;let c=spriteCache.get(key);if(c)return c;
+  const rows=SPR[name];c=document.createElement('canvas');c.width=16*k;c.height=16*k;
+  const g=c.getContext('2d');
+  for(let y=0;y<16;y++){const row=rows[y];let x=0;while(x<16){const ch=row[x];let e=x+1;while(e<16&&row[e]===ch)e++;if(ch!=='.'){g.fillStyle=PAL[ch]||'#f0f';g.fillRect(x*k,y*k,(e-x)*k,k);}x=e;}}
+  spriteCache.set(key,c);return c;
+}
+function drawPixNum(cv,str,unitCss){
+  unitCss=unitCss||3;const dpr=DPR();const u=Math.max(1,Math.round(unitCss*dpr));const n=str.length;
+  const W=(n*4-1)*u,H=5*u;
+  if(cv.width!==W||cv.height!==H){cv.width=W;cv.height=H;cv.style.width=(W/dpr)+'px';cv.style.height=(H/dpr)+'px';}
+  const g=cv.getContext('2d');g.clearRect(0,0,W,H);g.fillStyle=cv.dataset.color||'#4a2c15';
+  for(let i=0;i<n;i++){const d=DIGITS[str[i]]||DIGITS['-'];for(let y=0;y<5;y++)for(let x=0;x<3;x++)if(d[y][x]==='1')g.fillRect((i*4+x)*u,y*u,u,u);}
+}
+function drawStar(g,cx,cy,r,rot,color,alpha){
+  g.save();g.translate(cx,cy);g.rotate(rot);g.globalAlpha=Math.max(0,alpha);g.fillStyle=color;g.beginPath();
+  for(let i=0;i<10;i++){const rr=i%2?r*0.45:r;const a=i*Math.PI/5-Math.PI/2;g.lineTo(Math.cos(a)*rr,Math.sin(a)*rr);}
+  g.closePath();g.fill();g.restore();
+}
+
+/* ================= 对话框 ================= */
+function dialog(overlay,opt){
+  overlay.innerHTML='';const d=document.createElement('div');d.className='dlg';
+  if(opt.title){const h=document.createElement('h2');h.textContent=opt.title;d.appendChild(h);}
+  for(const l of (opt.lines||[])){const p=document.createElement('p');p.textContent=l;d.appendChild(p);}
+  if(opt.html){const div=document.createElement('div');div.innerHTML=opt.html;d.appendChild(div);}
+  if(opt.build)opt.build(d);
+  if(opt.buttons&&opt.buttons.length){const bs=document.createElement('div');bs.className='btns';
+    for(const b of opt.buttons){const btn=document.createElement('button');btn.textContent=b.label;if(b.primary)btn.className='pri';btn.addEventListener('click',()=>{closeDialog(overlay);if(b.onClick)b.onClick();});bs.appendChild(btn);}
+    d.appendChild(bs);}
+  overlay.appendChild(d);overlay.hidden=false;return d;
+}
+function closeDialog(o){o.hidden=true;o.innerHTML='';}
+
+/* ================= 消消乐引擎(纯逻辑) ================= */
+/*ENGINE-START*/
+const M3=(function(){
+  const COLS=8,ROWS=8,KINDS=6;
+  const rnd=()=>Math.random();
+  function makeBoard(rng){
+    rng=rng||rnd;let b;
+    do{
+      b=[];
+      for(let r=0;r<ROWS;r++){const row=[];for(let c=0;c<COLS;c++){let k;do{k=Math.floor(rng()*KINDS);}while((c>=2&&row[c-1]===k&&row[c-2]===k)||(r>=2&&b[r-1][c]===k&&b[r-2][c]===k));row.push(k);}b.push(row);}
+    }while(!findAnyMove(b));
+    return b;
+  }
+  function findMatches(b){
+    const groups=[];
+    for(let r=0;r<ROWS;r++){let c=0;while(c<COLS){const k=b[r][c];let e=c+1;while(e<COLS&&b[r][e]===k)e++;if(k>=0&&e-c>=3){const cells=[];for(let i=c;i<e;i++)cells.push([r,i]);groups.push({cells:cells,dir:'h'});}c=e;}}
+    for(let c=0;c<COLS;c++){let r=0;while(r<ROWS){const k=b[r][c];let e=r+1;while(e<ROWS&&b[e][c]===k)e++;if(k>=0&&e-r>=3){const cells=[];for(let i=r;i<e;i++)cells.push([i,c]);groups.push({cells:cells,dir:'v'});}r=e;}}
+    return groups;
+  }
+  function matchedSet(groups){const s=new Set();for(const g of groups)for(const rc of g.cells)s.add(rc[0]*COLS+rc[1]);return s;}
+  function isAdjacent(a,b){return Math.abs(a.r-b.r)+Math.abs(a.c-b.c)===1;}
+  function swapCells(b,a,c){const t=b[a.r][a.c];b[a.r][a.c]=b[c.r][c.c];b[c.r][c.c]=t;}
+  function lineAt(b,r,c){
+    const k=b[r][c];if(k<0)return false;
+    let n=1;for(let i=c-1;i>=0&&b[r][i]===k;i--)n++;for(let i=c+1;i<COLS&&b[r][i]===k;i++)n++;if(n>=3)return true;
+    n=1;for(let i=r-1;i>=0&&b[i][c]===k;i--)n++;for(let i=r+1;i<ROWS&&b[i][c]===k;i++)n++;return n>=3;
+  }
+  function swapMakesMatch(b,a,c){swapCells(b,a,c);const ok=lineAt(b,a.r,a.c)||lineAt(b,c.r,c.c);swapCells(b,a,c);return ok;}
+  function findAllMoves(b){
+    const out=[];
+    for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++){
+      if(c+1<COLS&&swapMakesMatch(b,{r:r,c:c},{r:r,c:c+1}))out.push([{r:r,c:c},{r:r,c:c+1}]);
+      if(r+1<ROWS&&swapMakesMatch(b,{r:r,c:c},{r:r+1,c:c}))out.push([{r:r,c:c},{r:r+1,c:c}]);
+    }
+    return out;
+  }
+  function findAnyMove(b){
+    for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++){
+      if(c+1<COLS&&swapMakesMatch(b,{r:r,c:c},{r:r,c:c+1}))return [{r:r,c:c},{r:r,c:c+1}];
+      if(r+1<ROWS&&swapMakesMatch(b,{r:r,c:c},{r:r+1,c:c}))return [{r:r,c:c},{r:r+1,c:c}];
+    }
+    return null;
+  }
+  function applyGravity(b){
+    const moves=[];
+    for(let c=0;c<COLS;c++){let w=ROWS-1;for(let r=ROWS-1;r>=0;r--){if(b[r][c]>=0){if(w!==r){b[w][c]=b[r][c];b[r][c]=-1;moves.push({from:{r:r,c:c},to:{r:w,c:c}});}w--;}}}
+    return moves;
+  }
+  function refill(b,rng){
+    rng=rng||rnd;const spawned=[];
+    for(let c=0;c<COLS;c++){let n=0;for(let r=0;r<ROWS;r++)if(b[r][c]<0)n++;for(let r=0;r<ROWS;r++)if(b[r][c]<0){b[r][c]=Math.floor(rng()*KINDS);spawned.push({r:r,c:c,fromR:r-n});}}
+    return spawned;
+  }
+  function shuffle(b,rng){
+    rng=rng||rnd;const flat=[];for(const row of b)for(const k of row)flat.push(k);let tries=0;
+    do{
+      for(let i=flat.length-1;i>0;i--){const j=Math.floor(rng()*(i+1));const t=flat[i];flat[i]=flat[j];flat[j]=t;}
+      for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++)b[r][c]=flat[r*COLS+c];
+      if(++tries>200){const nb=makeBoard(rng);for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++)b[r][c]=nb[r][c];return b;}
+    }while(findMatches(b).length||!findAnyMove(b));
+    return b;
+  }
+  function scoreFor(len){return len>=5?100:len===4?60:30;}
+  return {COLS:COLS,ROWS:ROWS,KINDS:KINDS,makeBoard:makeBoard,findMatches:findMatches,matchedSet:matchedSet,isAdjacent:isAdjacent,swapCells:swapCells,swapMakesMatch:swapMakesMatch,findAllMoves:findAllMoves,findAnyMove:findAnyMove,applyGravity:applyGravity,refill:refill,shuffle:shuffle,scoreFor:scoreFor};
+})();
+/*ENGINE-END*/
+
+/* ================= 消消乐 界面 ================= */
+const Sushi=(function(){
+  const COLS=M3.COLS,ROWS=M3.ROWS;
+  const TIME_MAX=60,HINT_SECS=8;
+  const S={dpr:1,cell:0,size:0,k:1,board:null,tiles:null,level:1,score:0,target:0,time:TIME_MAX,hint:0,hintPair:null,busy:false,sel:null,running:false,over:false,timeUp:false,modal:null,tweens:[],parts:[],floaters:[],best:store.get('aigame.sushi.best',{score:0,level:1}),last:0,raf:0,down:null,visible:false,hudKey:''};
+  const el={};
+  const targetFor=l=>500*l+150*l*(l-1);
+  const gainFor=l=>Math.max(0.35,1.0-(l-1)*0.08);
+  function init(){
+    el.canvas=$('#sushiCanvas');el.ctx=el.canvas.getContext('2d');el.stage=$('#sushiStage');
+    el.level=$('#sushiLevel');el.score=$('#sushiScore');el.target=$('#sushiTarget');el.best=$('#sushiBest');
+    el.timeBar=$('#sushiTimeBar');el.timeWrap=$('#sushiTimeWrap');el.hintBar=$('#sushiHintBar');el.overlay=$('#sushiOverlay');
+    el.canvas.addEventListener('pointerdown',onDown);el.canvas.addEventListener('pointermove',onMove);
+    el.canvas.addEventListener('pointerup',onUp);el.canvas.addEventListener('pointercancel',()=>{S.down=null;});
+    $('#sushiHintBtn').addEventListener('click',manualHint);
+    $('#sushiPauseBtn').addEventListener('click',()=>{if(S.running&&!S.over&&!S.modal)pause();});
+    if(window.ResizeObserver)new ResizeObserver(()=>{if(S.visible)layout();}).observe(el.stage);
+    window.addEventListener('resize',()=>{if(S.visible)layout();});
+    document.addEventListener('visibilitychange',()=>{if(document.hidden&&S.visible&&S.running&&!S.over&&!S.modal)pause();});
+  }
+  function makeTile(kind,r,c){return {kind:kind,x:c,y:r,scale:1,alpha:1};}
+  function buildTiles(){S.tiles=[];for(let r=0;r<ROWS;r++){const row=[];for(let c=0;c<COLS;c++)row.push(makeTile(S.board[r][c],r,c));S.tiles.push(row);}}
+  function startLevel(){S.target=targetFor(S.level);S.time=TIME_MAX;S.timeUp=false;S.hint=0;S.hintPair=null;S.sel=null;S.busy=false;S.tweens=[];S.parts=[];S.floaters=[];S.board=M3.makeBoard();buildTiles();S.last=performance.now();}
+  function newGame(){S.level=1;S.score=0;S.over=false;S.modal=null;closeDialog(el.overlay);startLevel();S.running=true;}
+  function show(){
+    S.visible=true;layout();
+    if(!S.running||S.over)newGame();else if(S.modal)S.modal();
+    S.last=performance.now();cancelAnimationFrame(S.raf);S.raf=requestAnimationFrame(frame);
+  }
+  function hide(){
+    S.visible=false;cancelAnimationFrame(S.raf);
+    if(S.running&&!S.over&&!S.modal)S.modal=pauseDialog;
+    closeDialog(el.overlay);S.down=null;
+  }
+  function layout(){
+    const dpr=DPR();S.dpr=dpr;const rect=el.stage.getBoundingClientRect();
+    const css=Math.max(120,Math.floor(Math.min(rect.width,rect.height))-4);
+    const dev=Math.floor(css*dpr);S.cell=Math.floor(dev/COLS);const size=S.cell*COLS;S.size=size;
+    el.canvas.width=size;el.canvas.height=size;el.canvas.style.width=(size/dpr)+'px';el.canvas.style.height=(size/dpr)+'px';
+    S.k=Math.max(1,Math.floor((S.cell-4*dpr)/16));el.ctx.imageSmoothingEnabled=false;render();
+  }
+  function frame(t){
+    S.raf=requestAnimationFrame(frame);
+    const dt=Math.min(0.1,Math.max(0,(t-S.last)/1000));S.last=t;
+    if(S.running&&!S.modal&&!S.over){
+      S.time-=dt;
+      if(S.time<=0){S.time=0;if(!S.busy)gameOver();else S.timeUp=true;}
+      if(!S.busy&&!S.hintPair){S.hint=Math.min(1,S.hint+dt/HINT_SECS);if(S.hint>=1)showHint(false);}
+    }
+    updateTweens(dt);updateFx(dt);render();hud();
+  }
+  function tween(obj,to,dur,ease){
+    return new Promise(res=>{const from={};for(const k in to)from[k]=obj[k];S.tweens.push({obj:obj,from:from,to:to,dur:dur,t:0,ease:ease||easeOut,res:res});});
+  }
+  function updateTweens(dt){
+    if(!S.tweens.length)return;const done=[];
+    for(const tw of S.tweens){tw.t+=dt;const p=Math.min(1,tw.t/tw.dur);const e=tw.ease(p);for(const k in tw.to)tw.obj[k]=tw.from[k]+(tw.to[k]-tw.from[k])*e;if(p>=1)done.push(tw);}
+    if(done.length){S.tweens=S.tweens.filter(t=>done.indexOf(t)<0);for(const d of done)d.res();}
+  }
+  function cellAt(e){const r=el.canvas.getBoundingClientRect();return {c:Math.floor((e.clientX-r.left)/r.width*COLS),r:Math.floor((e.clientY-r.top)/r.height*ROWS)};}
+  function inBoard(p){return p.r>=0&&p.c>=0&&p.r<ROWS&&p.c<COLS;}
+  function onDown(e){
+    if(!S.running||S.modal||S.over||S.busy)return;const p=cellAt(e);if(!inBoard(p))return;
+    S.down={r:p.r,c:p.c,x:e.clientX,y:e.clientY,moved:false};
+    try{el.canvas.setPointerCapture(e.pointerId);}catch(err){}
+    e.preventDefault();
+  }
+  function onMove(e){
+    const d=S.down;if(!d||d.moved)return;const dx=e.clientX-d.x,dy=e.clientY-d.y;
+    const cellCss=el.canvas.getBoundingClientRect().width/COLS;
+    if(Math.max(Math.abs(dx),Math.abs(dy))<cellCss*0.3)return;
+    d.moved=true;let t;
+    if(Math.abs(dx)>Math.abs(dy))t={r:d.r,c:d.c+(dx>0?1:-1)};else t={r:d.r+(dy>0?1:-1),c:d.c};
+    S.sel=null;if(inBoard(t))trySwap({r:d.r,c:d.c},t);
+  }
+  function onUp(){
+    const d=S.down;S.down=null;if(!d||d.moved)return;const p={r:d.r,c:d.c};
+    if(S.sel){
+      if(S.sel.r===p.r&&S.sel.c===p.c){S.sel=null;return;}
+      if(M3.isAdjacent(S.sel,p)){const a=S.sel;S.sel=null;trySwap(a,p);return;}
+    }
+    S.sel=p;
+  }
+  async function trySwap(a,b){
+    if(S.busy||S.modal||S.over)return;S.busy=true;
+    const ta=S.tiles[a.r][a.c],tb=S.tiles[b.r][b.c];
+    await Promise.all([tween(ta,{x:b.c,y:b.r},0.12),tween(tb,{x:a.c,y:a.r},0.12)]);
+    M3.swapCells(S.board,a,b);S.tiles[a.r][a.c]=tb;S.tiles[b.r][b.c]=ta;
+    if(M3.findMatches(S.board).length){
+      S.hint=0;S.hintPair=null;await resolve();
+    }else{
+      await Promise.all([tween(ta,{x:a.c,y:a.r},0.12),tween(tb,{x:b.c,y:b.r},0.12)]);
+      M3.swapCells(S.board,a,b);S.tiles[a.r][a.c]=ta;S.tiles[b.r][b.c]=tb;
+    }
+    S.busy=false;afterAction();
+  }
+  function afterAction(){
+    if(S.over||S.modal)return;
+    if(S.score>=S.target){levelUp();return;}
+    if(S.timeUp){gameOver();return;}
+    if(!M3.findAnyMove(S.board))doShuffle();
+  }
+  async function resolve(){
+    let combo=0;
+    for(;;){
+      const groups=M3.findMatches(S.board);if(!groups.length)break;
+      combo++;const set=M3.matchedSet(groups);let gained=0;
+      for(const g of groups){const pts=M3.scoreFor(g.cells.length)*combo;gained+=pts;const mid=g.cells[Math.floor(g.cells.length/2)];floater('+'+pts,mid[1]+0.5,mid[0]+0.5,combo>1?'#d9453a':'#4a2c15',14);}
+      S.score+=gained;S.time=Math.min(TIME_MAX,S.time+set.size*gainFor(S.level));
+      if(combo>1)floater('连击 x'+combo,COLS/2,1.2,'#f08a3c',18);
+      const anims=[];
+      set.forEach(key=>{const r=Math.floor(key/COLS),c=key%COLS;const t=S.tiles[r][c];burst(c+0.5,r+0.5,t.kind);anims.push(tween(t,{scale:0,alpha:0},0.18,easeIn));});
+      await Promise.all(anims);
+      set.forEach(key=>{const r=Math.floor(key/COLS),c=key%COLS;S.board[r][c]=-1;S.tiles[r][c]=null;});
+      const moves=M3.applyGravity(S.board);const falls=[];
+      for(const m of moves){const t=S.tiles[m.from.r][m.from.c];S.tiles[m.to.r][m.to.c]=t;S.tiles[m.from.r][m.from.c]=null;falls.push(tween(t,{y:m.to.r},0.1+0.04*(m.to.r-m.from.r)));}
+      const spawned=M3.refill(S.board);
+      for(const s of spawned){const t=makeTile(S.board[s.r][s.c],s.fromR,s.c);S.tiles[s.r][s.c]=t;falls.push(tween(t,{y:s.r},0.1+0.04*(s.r-s.fromR)));}
+      await Promise.all(falls);
+    }
+  }
+  async function doShuffle(){
+    S.busy=true;S.hintPair=null;floater('无步可走 · 洗牌',COLS/2,ROWS/2,'#d9453a',18);
+    const all=[];for(const row of S.tiles)for(const t of row)all.push(tween(t,{scale:0},0.2,easeIn));await Promise.all(all);
+    M3.shuffle(S.board);buildTiles();for(const row of S.tiles)for(const t of row)t.scale=0;
+    const back=[];for(const row of S.tiles)for(const t of row)back.push(tween(t,{scale:1},0.2));await Promise.all(back);
+    S.busy=false;afterAction();
+  }
+  function showHint(manual){const moves=M3.findAllMoves(S.board);if(!moves.length)return;S.hintPair=moves[Math.floor(Math.random()*moves.length)];S.hint=manual?0:1;}
+  function manualHint(){if(!S.running||S.modal||S.over||S.busy)return;showHint(true);}
+  function levelUp(){S.modal=levelUpDialog;levelUpDialog();}
+  function levelUpDialog(){
+    const bonus=Math.ceil(S.time)*5;
+    dialog(el.overlay,{title:'第 '+S.level+' 关 通过!',lines:['分数 '+S.score,'剩余 '+Math.ceil(S.time)+' 秒 · 时间奖励 +'+bonus],buttons:[{label:'下一关',primary:true,onClick(){S.modal=null;S.score+=bonus;S.level++;saveBest();startLevel();}}]});
+  }
+  function gameOver(){S.over=true;S.timeUp=false;S.hintPair=null;S.sel=null;saveBest();S.modal=gameOverDialog;gameOverDialog();}
+  function gameOverDialog(){
+    dialog(el.overlay,{title:'时间到',lines:['本局得分 '+S.score,'打到第 '+S.level+' 关','最高分 '+S.best.score],buttons:[{label:'再来一局',primary:true,onClick(){newGame();}},{label:'返回菜单',onClick(){S.modal=null;location.hash='';}}]});
+  }
+  function pause(){S.modal=pauseDialog;pauseDialog();}
+  function pauseDialog(){
+    dialog(el.overlay,{title:'暂停',lines:['第 '+S.level+' 关 · 分数 '+S.score],buttons:[{label:'继续',primary:true,onClick(){S.modal=null;S.last=performance.now();}},{label:'重新开始',onClick(){newGame();}},{label:'返回菜单',onClick(){location.hash='';}}]});
+  }
+  function saveBest(){let ch=false;if(S.score>S.best.score){S.best.score=S.score;ch=true;}if(S.level>S.best.level){S.best.level=S.level;ch=true;}if(ch)store.set('aigame.sushi.best',S.best);}
+  function hud(){
+    const bestShown=Math.max(S.best.score,S.score);
+    const key=S.level+'|'+S.score+'|'+S.target+'|'+bestShown;
+    if(key!==S.hudKey){S.hudKey=key;drawPixNum(el.level,String(S.level).padStart(2,'0'));drawPixNum(el.score,String(S.score).padStart(5,'0'));drawPixNum(el.target,String(S.target).padStart(5,'0'));drawPixNum(el.best,String(bestShown).padStart(5,'0'));}
+    el.timeBar.style.width=(S.time/TIME_MAX*100)+'%';el.hintBar.style.width=(S.hint*100)+'%';
+    el.timeWrap.classList.toggle('low',S.time<10);
+  }
+  function burst(cx,cy,kind){
+    const colors=['#f08a3c','#2e7d4f','#fffaf0','#ff8fa0','#ffd23f','#d9453a'];
+    for(let i=0;i<6;i++){const a=Math.random()*Math.PI*2,sp=1.5+Math.random()*2.5;S.parts.push({x:cx,y:cy,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp-2,life:0.5+Math.random()*0.3,t:0,rot:Math.random()*6,color:colors[kind%colors.length],size:0.12+Math.random()*0.1});}
+  }
+  function floater(text,x,y,color,size){S.floaters.push({text:text,x:x,y:y,color:color,size:size||14,t:0,life:0.9});}
+  function updateFx(dt){
+    for(const p of S.parts){p.t+=dt;p.x+=p.vx*dt;p.y+=p.vy*dt;p.vy+=9*dt;p.rot+=4*dt;}
+    if(S.parts.length)S.parts=S.parts.filter(p=>p.t<p.life);
+    for(const f of S.floaters){f.t+=dt;f.y-=0.9*dt;}
+    if(S.floaters.length)S.floaters=S.floaters.filter(f=>f.t<f.life);
+  }
+  function render(){
+    const g=el.ctx,cell=S.cell,n=S.size,dpr=S.dpr;if(!n)return;
+    g.clearRect(0,0,n,n);
+    for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++){g.fillStyle=((r+c)&1)?'#f2dea0':'#f9ecc0';g.fillRect(c*cell,r*cell,cell,cell);}
+    if(S.tiles){
+      const k=S.k,sz=16*k;
+      for(const row of S.tiles)for(const t of row){
+        if(!t)continue;const spr=getSprite(SUSHI_KINDS[t.kind],k);const w=sz*t.scale;if(w<1)continue;
+        const x=t.x*cell+(cell-w)/2,y=t.y*cell+(cell-w)/2;g.globalAlpha=t.alpha;
+        if(t.scale===1)g.drawImage(spr,Math.round(x),Math.round(y));else g.drawImage(spr,x,y,w,w);
+      }
+      g.globalAlpha=1;
+    }
+    if(S.hintPair){const a=0.45+0.45*Math.sin(performance.now()/120);g.lineWidth=3*dpr;g.strokeStyle='rgba(240,138,60,'+a.toFixed(2)+')';for(const p of S.hintPair)g.strokeRect(p.c*cell+2*dpr,p.r*cell+2*dpr,cell-4*dpr,cell-4*dpr);}
+    if(S.sel){g.setLineDash([4*dpr,3*dpr]);g.lineWidth=2*dpr;g.strokeStyle='#d9453a';g.strokeRect(S.sel.c*cell+2*dpr,S.sel.r*cell+2*dpr,cell-4*dpr,cell-4*dpr);g.setLineDash([]);}
+    for(const p of S.parts)drawStar(g,p.x*cell,p.y*cell,p.size*cell,p.rot,p.color,1-p.t/p.life);
+    for(const f of S.floaters){
+      const a=f.t<f.life*0.6?1:1-(f.t-f.life*0.6)/(f.life*0.4);g.globalAlpha=Math.max(0,a);
+      g.font='bold '+Math.round(f.size*dpr)+'px '+MONO;g.textAlign='center';g.textBaseline='middle';
+      g.lineWidth=3*dpr;g.strokeStyle='#fffaf0';g.strokeText(f.text,f.x*cell,f.y*cell);g.fillStyle=f.color;g.fillText(f.text,f.x*cell,f.y*cell);
+    }
+    g.globalAlpha=1;
+  }
+  return {init:init,show:show,hide:hide};
+})();
+
+/* ================= 推箱子 关卡(XSB) ================= */
+/*LEVELS-START*/
+const LEVELS=[
+{name:"十字路口",map:`
+   ###
+   #.#
+   # #
+####$####
+#.$ @ $.#
+#### ####
+   # #
+   ###`},
+{name:"两两",map:`
+######
+#    #
+# #@ #
+# $* #
+# .* #
+#    #
+######`},
+{name:"拐角",map:`
+######
+#    ##
+# $ . #
+# #$# #
+#  . @#
+#######`},
+{name:"阶梯",map:`
+#####
+#   ####
+# $$   #
+#. .#  #
+### # @#
+  #    #
+  ######`},
+{name:"小房间",map:`
+######
+#    #
+#.$@ #
+#  $ #
+# .  #
+######`},
+{name:"回廊",map:`
+########
+#      #
+# ##   #
+# #  $ #
+# $ #. #
+#.  @  #
+########`},
+{name:"三角",map:`
+ #####
+ #   #
+##$  ##
+#. @ .#
+##  $##
+ #   #
+ #####`},
+{name:"小仓库",map:`
+#######
+#     #
+# $$  #
+#..@  #
+#     #
+#######`},
+{name:"四方",map:`
+ ######
+##    ##
+# .$$. #
+# $..$ #
+#  @   #
+########`},
+{name:"错位",map:`
+########
+# .  . #
+#  $$  #
+#  @   #
+#      #
+########`},
+{name:"拉链",map:`
+########
+#      #
+# $.$. #
+# .$.$ #
+#   @  #
+########`},
+{name:"Y 形",map:`
+  #####
+  #   #
+### # #
+#. @$ #
+#  ## #
+#. $  #
+#######`},
+{name:"两层",map:`
+########
+#      #
+# $ ## #
+# ## . #
+# ## $ #
+#.  @  #
+########`},
+{name:"双门",map:`
+ #######
+ #  #  #
+ # $#$ #
+##  .  ##
+#   .   #
+#   @   #
+#########`},
+{name:"卡位",map:`
+#######
+#  .  #
+# $$$ #
+#. @ .#
+#     #
+#######`},
+{name:"中枢",map:`
+#######
+#. . .#
+# $$$ #
+#  @  #
+#     #
+#######`},
+{name:"梅花",map:`
+ #######
+ #     #
+ # .$. #
+## $@$ #
+#  .$. #
+#      #
+########`},
+{name:"密室",map:`
+#######
+#     #
+# $ $ #
+#. # .#
+#  $  #
+# .@  #
+#######`},
+{name:"井字",map:`
+#######
+#     #
+# .$. #
+# $.$ #
+# .$. #
+# $.$ #
+#  @  #
+#######`},
+{name:"三连",map:`
+########
+#      #
+# .**$@#
+#      #
+#####  #
+    ####`},
+{name:"一角",map:`
+####
+# .#
+#  ###
+#*@  #
+#  $ #
+#  ###
+####`},
+{name:"转弯",map:`
+#####
+#   ####
+#      #
+## $$@ #
+ #  ## #
+ #.  . #
+ #######`},
+{name:"四角",map:`
+########
+#.    .#
+# $  $ #
+#  @   #
+# $  $ #
+#.    .#
+########`},
+{name:"斜坡",map:`
+#####
+#.  ##
+#@$$ #
+##   #
+ ##  #
+  ##.#
+   ###`},
+{name:"小院",map:`
+#########
+#       #
+# $   $ #
+#  #.#  #
+#  ...  #
+# $ # $ #
+#   @   #
+#########`},
+{name:"走廊",map:`
+  ####
+###  ####
+#     $ #
+# #  #$ #
+# . .#@ #
+#########`},
+{name:"走廊推",map:`
+##########
+#   ##   #
+# $   $  #
+### ###  #
+#..      #
+#   #  @ #
+##########`},
+{name:"大厅",map:`
+##########
+#        #
+#  $$$   #
+#        #
+#   @    #
+# .  .  .#
+##########`},
+{name:"九宫",map:`
+#########
+#   #   #
+# $ $ $ #
+### # ###
+#   .   #
+# . @ . #
+#   #   #
+#########`},
+{name:"十字二",map:`
+   ###
+   #.#
+ ###.###
+ #  $  #
+##  $  ##
+#. $@$ .#
+##  $  ##
+ #  $  #
+ ###.###
+   #.#
+   ###`},
+{name:"长廊",map:`
+############
+#    #     #
+# $  #     #
+#  $ ##    #
+#@       ..#
+############`},
+{name:"三兄弟",map:`
+      #####
+      #.  #
+      #.# #
+#######.# #
+# @ $ $ $ #
+# # # # ###
+#       #
+#########`},
+{name:"仓库",map:`
+###### #####
+#    ###   #
+# $$     #@#
+# $ #...   #
+#   ########
+#####`},
+{name:"水路",map:`
+  ######
+  # ..@#
+  # $$ #
+  ## ###
+   # #
+   # #
+#### #
+#    ##
+# #   #
+#   # #
+###   #
+  #####`}
+];
+/*LEVELS-END*/
+
+/* ================= 推箱子 界面 ================= */
+const Soko=(function(){
+  const DX=[0,1,0,-1],DY=[-1,0,1,0];
+  const S={lvl:0,w:0,h:0,walls:null,voids:null,targets:null,boxes:null,player:0,moves:0,pushes:0,hist:[],anim:null,queue:[],k:1,cell:16,dpr:1,won:false,prog:store.get('aigame.soko.v1',{done:{},cur:0}),facing:1,rep:null,visible:false,raf:0,last:0,modal:null,hudKey:'',sw:null};
+  const el={};
+  function parse(map){
+    const lines=map.replace(/\r/g,'').split('\n');
+    while(lines.length&&lines[0].trim()==='')lines.shift();
+    while(lines.length&&lines[lines.length-1].trim()==='')lines.pop();
+    const h=lines.length,w=Math.max.apply(null,lines.map(l=>l.length));const N=w*h;
+    const walls=new Array(N).fill(false),targets=new Array(N).fill(false);const boxes=new Set();let player=-1;
+    for(let y=0;y<h;y++){const line=lines[y].padEnd(w,' ');for(let x=0;x<w;x++){const ch=line[x],i=y*w+x;if(ch==='#')walls[i]=true;else{if(ch==='.'||ch==='*'||ch==='+')targets[i]=true;if(ch==='$'||ch==='*')boxes.add(i);if(ch==='@'||ch==='+')player=i;}}}
+    const voids=new Array(N).fill(true);const st=[player];voids[player]=false;
+    while(st.length){const i=st.pop();const x=i%w,y=Math.floor(i/w);for(let d=0;d<4;d++){const nx=x+DX[d],ny=y+DY[d];if(nx<0||ny<0||nx>=w||ny>=h)continue;const j=ny*w+nx;if(walls[j]||!voids[j])continue;voids[j]=false;st.push(j);}}
+    return {w:w,h:h,walls:walls,targets:targets,boxes:boxes,player:player,voids:voids};
+  }
+  function init(){
+    el.canvas=$('#sokoCanvas');el.ctx=el.canvas.getContext('2d');el.stage=$('#sokoStage');
+    el.name=$('#sokoLevelName');el.sub=$('#sokoLevelSub');el.moves=$('#sokoMoves');el.pushes=$('#sokoPushes');el.best=$('#sokoBest');
+    el.prev=$('#sokoPrev');el.next=$('#sokoNext');el.overlay=$('#sokoOverlay');
+    el.prev.addEventListener('click',()=>load(S.lvl-1));el.next.addEventListener('click',()=>load(S.lvl+1));
+    $('#sokoRestartBtn').addEventListener('click',()=>load(S.lvl));
+    $('#sokoSelectBtn').addEventListener('click',selectDialog);
+    $('#sokoHelpBtn').addEventListener('click',helpDialog);
+    $('#sokoUndoBtn').addEventListener('click',undo);
+    el.canvas.addEventListener('pointerdown',e=>{if(S.modal)return;S.sw={x:e.clientX,y:e.clientY,done:false};try{el.canvas.setPointerCapture(e.pointerId);}catch(err){}e.preventDefault();});
+    el.canvas.addEventListener('pointermove',e=>{const s=S.sw;if(!s||s.done)return;const dx=e.clientX-s.x,dy=e.clientY-s.y;if(Math.max(Math.abs(dx),Math.abs(dy))<22)return;s.done=true;input(Math.abs(dx)>Math.abs(dy)?(dx>0?1:3):(dy>0?2:0));});
+    el.canvas.addEventListener('pointerup',()=>{S.sw=null;});el.canvas.addEventListener('pointercancel',()=>{S.sw=null;});
+    document.querySelectorAll('.dk[data-dir]').forEach(b=>{
+      const d=+b.dataset.dir;
+      const start=e=>{e.preventDefault();try{b.setPointerCapture(e.pointerId);}catch(err){}input(d);stopRep();S.rep=setInterval(()=>input(d),170);};
+      b.addEventListener('pointerdown',start);b.addEventListener('pointerup',stopRep);b.addEventListener('pointercancel',stopRep);b.addEventListener('pointerleave',stopRep);
+    });
+    document.addEventListener('keydown',e=>{
+      if(!S.visible||S.modal)return;const k=e.key;
+      const map={ArrowUp:0,ArrowRight:1,ArrowDown:2,ArrowLeft:3,w:0,d:1,s:2,a:3,W:0,D:1,S:2,A:3};
+      if(k in map){e.preventDefault();input(map[k]);}
+      else if(k==='z'||k==='Z'||k==='u'||k==='U'||k==='Backspace'){e.preventDefault();undo();}
+      else if(k==='r'||k==='R')load(S.lvl);
+    });
+    if(window.ResizeObserver)new ResizeObserver(()=>{if(S.visible)layout();}).observe(el.stage);
+    window.addEventListener('resize',()=>{if(S.visible)layout();});
+    load(clamp(S.prog.cur||0,0,LEVELS.length-1));
+  }
+  function stopRep(){if(S.rep){clearInterval(S.rep);S.rep=null;}}
+  function saveProg(){store.set('aigame.soko.v1',S.prog);}
+  function load(n){
+    n=clamp(n,0,LEVELS.length-1);S.lvl=n;const L=parse(LEVELS[n].map);
+    S.w=L.w;S.h=L.h;S.walls=L.walls;S.targets=L.targets;S.boxes=L.boxes;S.player=L.player;S.voids=L.voids;
+    S.moves=0;S.pushes=0;S.hist=[];S.anim=null;S.queue=[];S.won=false;S.facing=1;S.modal=null;closeDialog(el.overlay);
+    S.prog.cur=n;saveProg();if(S.visible)layout();hud(true);
+  }
+  function isSolved(){for(const b of S.boxes)if(!S.targets[b])return false;return true;}
+  function input(d){if(S.modal||S.won)return;if(S.anim){if(S.queue.length<2)S.queue.push(d);}else doMove(d);}
+  function doMove(d){
+    const w=S.w,dx=DX[d],dy=DY[d],p=S.player,px=p%w,py=Math.floor(p/w),nx=px+dx,ny=py+dy;
+    if(nx<0||ny<0||nx>=w||ny>=S.h)return false;const n=ny*w+nx;if(S.walls[n])return false;
+    let pushed=null;
+    if(S.boxes.has(n)){const bx=nx+dx,by=ny+dy;if(bx<0||by<0||bx>=w||by>=S.h)return false;const b=by*w+bx;if(S.walls[b]||S.boxes.has(b))return false;S.boxes.delete(n);S.boxes.add(b);pushed={from:n,to:b};S.pushes++;}
+    S.hist.push({p:p,box:pushed});S.player=n;S.moves++;if(dx)S.facing=dx;
+    S.anim={t:0,dur:0.09,pFrom:p,box:pushed};return true;
+  }
+  function undo(){
+    if(S.modal||S.won||!S.hist.length)return;S.anim=null;S.queue=[];
+    const h=S.hist.pop();S.player=h.p;if(h.box){S.boxes.delete(h.box.to);S.boxes.add(h.box.from);S.pushes--;}S.moves--;
+  }
+  function onWin(){
+    S.won=true;stopRep();const prev=S.prog.done[S.lvl];const best=prev==null?S.moves:Math.min(prev,S.moves);S.prog.done[S.lvl]=best;saveProg();hud(true);
+    const last=S.lvl>=LEVELS.length-1;
+    const btns=[];
+    if(!last)btns.push({label:'下一关',primary:true,onClick(){S.modal=null;load(S.lvl+1);}});
+    btns.push({label:'重玩',onClick(){S.modal=null;load(S.lvl);}});
+    btns.push({label:'选关',onClick(){S.modal=null;selectDialog();}});
+    S.modal=()=>dialog(el.overlay,{title:last?'全部通关!':'第 '+(S.lvl+1)+' 关 完成!',lines:['步数 '+S.moves+' · 推箱 '+S.pushes,'本关最佳 '+best+(prev!=null&&S.moves<prev?' (新纪录)':'')],buttons:btns});
+    S.modal();
+  }
+  function selectDialog(){
+    S.modal=selectDialog;
+    dialog(el.overlay,{title:'选择关卡',build(d){
+      const grid=document.createElement('div');grid.className='lvgrid';
+      LEVELS.forEach((L,i)=>{const b=document.createElement('button');const done=S.prog.done[i];b.textContent=(i+1)+(done!=null?'✓':'');if(done!=null)b.classList.add('done');if(i===S.lvl)b.classList.add('cur');b.title=L.name;b.addEventListener('click',()=>{closeDialog(el.overlay);S.modal=null;load(i);});grid.appendChild(b);});
+      d.appendChild(grid);
+      const p=document.createElement('p');p.textContent='已通关 '+Object.keys(S.prog.done).length+' / '+LEVELS.length;d.appendChild(p);
+    },buttons:[{label:'关闭',onClick(){S.modal=null;}}]});
+  }
+  function helpDialog(){
+    S.modal=helpDialog;
+    dialog(el.overlay,{title:'推箱子 玩法',html:'<div class="txt">把每个箱子推到<b>绿色垫子</b>上就过关。<br>在棋盘上<b>滑动</b>,或按下方的方向键走动;方向键<b>按住不放</b>会连续走。<br>推错了按中间的<b>撤销</b>,可以一直撤到开局。<br>进度自动保存,换关不丢。</div>',buttons:[{label:'知道了',primary:true,onClick(){S.modal=null;}}]});
+  }
+  function show(){S.visible=true;layout();if(S.modal)S.modal();S.last=performance.now();cancelAnimationFrame(S.raf);S.raf=requestAnimationFrame(frame);}
+  function hide(){S.visible=false;cancelAnimationFrame(S.raf);stopRep();closeDialog(el.overlay);S.sw=null;}
+  function layout(){
+    if(!S.w)return;const dpr=DPR();S.dpr=dpr;const rect=el.stage.getBoundingClientRect();
+    const availW=Math.max(96,rect.width-8)*dpr,availH=Math.max(96,rect.height-8)*dpr;
+    let k=Math.floor(Math.min(availW/S.w,availH/S.h)/16);const kMax=Math.max(1,Math.floor(52*dpr/16));k=clamp(k,1,kMax);
+    S.k=k;S.cell=16*k;el.canvas.width=S.w*S.cell;el.canvas.height=S.h*S.cell;
+    el.canvas.style.width=(el.canvas.width/dpr)+'px';el.canvas.style.height=(el.canvas.height/dpr)+'px';el.ctx.imageSmoothingEnabled=false;render();
+  }
+  function frame(t){
+    S.raf=requestAnimationFrame(frame);const dt=Math.min(0.1,Math.max(0,(t-S.last)/1000));S.last=t;
+    if(S.anim){S.anim.t+=dt;if(S.anim.t>=S.anim.dur){S.anim=null;if(!S.won&&isSolved())onWin();}}
+    if(!S.anim&&S.queue.length&&!S.modal&&!S.won)doMove(S.queue.shift());
+    render();hud(false);
+  }
+  function hud(force){
+    const best=S.prog.done[S.lvl];const key=S.lvl+'|'+S.moves+'|'+S.pushes+'|'+best;
+    if(!force&&key===S.hudKey)return;S.hudKey=key;
+    el.name.textContent='第'+(S.lvl+1)+'关';el.sub.textContent=LEVELS[S.lvl].name;el.moves.textContent=S.moves;el.pushes.textContent=S.pushes;el.best.textContent=best==null?'--':best+' 步';
+    el.prev.disabled=S.lvl===0;el.next.disabled=S.lvl>=LEVELS.length-1;
+  }
+  function render(){
+    const g=el.ctx,cs=S.cell,w=S.w,h=S.h;if(!w)return;g.clearRect(0,0,w*cs,h*cs);
+    const k=S.k,floor=getSprite('floor',k),wall=getSprite('wall',k),target=getSprite('target',k),box=getSprite('box',k),boxOn=getSprite('boxOn',k),cat=getSprite('cat',k);
+    for(let i=0;i<w*h;i++){const x=(i%w)*cs,y=Math.floor(i/w)*cs;if(S.walls[i])g.drawImage(wall,x,y);else if(!S.voids[i])g.drawImage(S.targets[i]?target:floor,x,y);}
+    const a=S.anim,p=a?Math.min(1,a.t/a.dur):1;
+    S.boxes.forEach(b=>{
+      let x=(b%w)*cs,y=Math.floor(b/w)*cs;const moving=a&&a.box&&a.box.to===b;
+      if(moving){const fx=(a.box.from%w)*cs,fy=Math.floor(a.box.from/w)*cs;x=fx+(x-fx)*p;y=fy+(y-fy)*p;}
+      g.drawImage(S.targets[b]&&!moving?boxOn:box,Math.round(x),Math.round(y));
+    });
+    let px=(S.player%w)*cs,py=Math.floor(S.player/w)*cs;
+    if(a){const fx=(a.pFrom%w)*cs,fy=Math.floor(a.pFrom/w)*cs;px=fx+(px-fx)*p;py=fy+(py-fy)*p;}
+    if(S.facing<0){g.save();g.translate(Math.round(px)+cs,Math.round(py));g.scale(-1,1);g.drawImage(cat,0,0);g.restore();}
+    else g.drawImage(cat,Math.round(px),Math.round(py));
+  }
+  return {init:init,show:show,hide:hide,count:()=>LEVELS.length};
+})();
+
+/* ================= 壳层 / 路由 ================= */
+const screens={home:$('#home'),sushi:$('#sushi'),sokoban:$('#sokoban')};
+function initHome(){
+  const dpr=DPR();
+  [['icoSushi','salmon'],['icoSoko','cat']].forEach(pair=>{const cv=$('#'+pair[0]);const k=Math.max(2,Math.round(4*dpr));cv.width=16*k;cv.height=16*k;cv.getContext('2d').drawImage(getSprite(pair[1],k),0,0);});
+  $('#homeHelp').addEventListener('click',()=>{
+    dialog($('#homeOverlay'),{title:'怎么玩',html:'<div class="txt"><b>寿司消消乐</b>:点两个相邻寿司交换,或直接滑动。三个同款连成一线就消除。分数到达目标过关;时间条走完结束,消除会补时间。提示条蓄满会自动指路。<br><br><b>推箱子</b>:把箱子推到绿垫上。滑动或按方向键走,中间键撤销。<br><br>两个游戏的记录都存在这部手机的浏览器里,换手机不同步。</div>',buttons:[{label:'知道了',primary:true}]});
+  });
+}
+function updateHomeStats(){
+  const b=store.get('aigame.sushi.best',{score:0,level:1});
+  $('#homeSushiStat').textContent='最高分 '+b.score+' · 最远第 '+b.level+' 关';
+  const p=store.get('aigame.soko.v1',{done:{}});
+  $('#homeSokoStat').textContent='已通关 '+Object.keys(p.done||{}).length+' / '+Soko.count()+' 关';
+}
+function route(){
+  const h=(location.hash||'').replace('#','');const name=screens[h]?h:'home';
+  for(const k in screens)screens[k].hidden=(k!==name);
+  if(name==='sushi')Sushi.show();else Sushi.hide();
+  if(name==='sokoban')Soko.show();else Soko.hide();
+  if(name==='home'){updateHomeStats();closeDialog($('#homeOverlay'));}
+}
+document.addEventListener('click',e=>{const b=e.target.closest('[data-go]');if(!b)return;const to=b.dataset.go;location.hash=to==='home'?'':('#'+to);});
+document.addEventListener('touchmove',e=>{if(e.target.closest('.stage,.dpad'))e.preventDefault();},{passive:false});
+Sushi.init();Soko.init();initHome();
+window.addEventListener('hashchange',route);route();
+})();
+</script>
+<!--ARTIFACT-END-->
+</body>
+</html>
