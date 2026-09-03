@@ -4,11 +4,24 @@
 
 ## 直接玩
 
-- Claude Artifact 链接(已发布,2026-09-03):https://claude.ai/code/artifact/8958317b-4388-4507-9910-3a30e203d196
-  - 这个链接默认是私密的,要在页面右上角的分享菜单里开放分享,朋友才能打开。
-  - 国内网络不一定能打开 claude.ai,保险的做法是下面的自托管。
+- **发朋友用这个**(GitHub Pages,公开仓库 wei865938-netizen/aigame,2026-09-03 上线):
+  https://wei865938-netizen.github.io/aigame/sushi-sokoban/
+  游戏机首页(以后加的游戏都列在这):https://wei865938-netizen.github.io/aigame/
+- Claude Artifact 备用链接:https://claude.ai/code/artifact/8958317b-4388-4507-9910-3a30e203d196 (默认私密,要在分享菜单里开放;国内经常打不开)
 - 电脑上直接双击 `index.html` 也能玩(推箱子支持键盘方向键、Z 撤销、R 重开)。
 - 直达某个游戏:链接后面加 `#sushi` 或 `#sokoban`。
+
+## 更新线上版本
+
+改完 `index.html` 后,在 `Desktop\aigame` 目录里:
+
+```
+git add -A
+git commit -m "更新游戏"
+git push
+```
+
+推上去一两分钟后 GitHub Pages 自动刷新。
 
 ## 自己托管(给国内朋友用)
 
