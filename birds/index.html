@@ -56,7 +56,10 @@ function load(n){
 }
 function loadBird(){
   if(S.birdsLeft<=0){S.bird=null;return;}
-  S.birdsLeft--;const b=Bodies.circle(REST.x,REST.y,12,{density:0.004,restitution:0.45,friction:0.7,label:'bird',isStatic:true});
+  S.birdsLeft--;
+  // 注意:不能在创建时就 isStatic:true,否则 setStatic(false) 会把质量恢复成错的值,小鸟发不出去
+  const b=Bodies.circle(REST.x,REST.y,12,{density:0.004,restitution:0.45,friction:0.7,label:'bird'});
+  Body.setStatic(b,true);
   S.bird=b;S.flying=false;S.flyT=0;Composite.add(world,b);hud();
 }
 function hud(){$('#lvl').textContent=S.lvl+1;$('#score').textContent=S.score;$('#birdsLeft').textContent='●'.repeat(S.birdsLeft+(S.bird&&!S.flying?1:0))||'○';}
@@ -81,7 +84,7 @@ function update(dt){
   if(S.over)return;
   if(S.flying&&S.bird){
     S.flyT+=dt;const b=S.bird;
-    const stopped=b.speed<0.25&&S.flyT>1.2;const out=b.position.y>H0+60||b.position.x>W0+40||b.position.x<-40;
+    const stopped=b.speed<0.25&&S.flyT>1.2;const out=!isFinite(b.position.x)||!isFinite(b.position.y)||b.position.y>H0+60||b.position.x>W0+40||b.position.x<-40;
     if(stopped||out||S.flyT>7){Composite.remove(world,b);S.bird=null;S.flying=false;if(S.pigs>0){if(S.birdsLeft>0)loadBird();else{S.over=true;setTimeout(fail,400);}}}
   }
   if(S.pigs<=0&&!S.over){S.over=true;setTimeout(win,900);}
@@ -119,7 +122,7 @@ function release(){
   if(!S.drag)return;S.drag=null;const b=S.bird;if(!b||S.flying)return;
   const dx=REST.x-b.position.x,dy=REST.y-b.position.y;
   if(Math.hypot(dx,dy)<8){Body.setPosition(b,REST);return;}
-  Body.setStatic(b,false);Body.setVelocity(b,{x:dx*0.2,y:dy*0.2});S.flying=true;S.flyT=0;hud();
+  Body.setStatic(b,false);Body.setDensity(b,0.004);Body.setVelocity(b,{x:dx*0.2,y:dy*0.2});S.flying=true;S.flyT=0;hud();
 }
 cv.addEventListener('pointerup',release);cv.addEventListener('pointercancel',release);
 /* 绘制 */

@@ -115,7 +115,7 @@ button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
     <button class="item" data-go="sokoban"><canvas id="icoSoko"></canvas><span><span class="t">推箱子</span><span class="s" id="homeSokoStat">已通关 0 关</span></span><span class="go">▶</span></button>
     <p class="foot"><span>AIGAME</span><span>2026</span></p>
   </div>
-  <div class="softkeys"><button data-go="sushi">选择</button><button id="homeHelp">玩法</button></div>
+  <div class="softkeys"><button data-go="sushi">选择</button><button id="homeHelp">玩法</button><button data-go="more">更多游戏</button></div>
   <div class="overlay" id="homeOverlay" hidden></div>
 </section>
 
@@ -1101,7 +1101,7 @@ function route(){
   if(name==='sokoban')Soko.show();else Soko.hide();
   if(name==='home'){updateHomeStats();closeDialog($('#homeOverlay'));}
 }
-document.addEventListener('click',e=>{const b=e.target.closest('[data-go]');if(!b)return;const to=b.dataset.go;location.hash=to==='home'?'':('#'+to);});
+document.addEventListener('click',e=>{const b=e.target.closest('[data-go]');if(!b)return;const to=b.dataset.go;if(to==='more'){location.href='../index.html';return;}location.hash=to==='home'?'':('#'+to);});
 document.addEventListener('touchmove',e=>{if(e.target.closest('.stage,.dpad'))e.preventDefault();},{passive:false});
 Sushi.init();Soko.init();initHome();
 window.addEventListener('hashchange',route);route();
