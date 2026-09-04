@@ -1081,6 +1081,7 @@ const Soko=(function(){
 
 /* ================= 壳层 / 路由 ================= */
 const screens={home:$('#home'),sushi:$('#sushi'),sokoban:$('#sokoban')};
+const FROM_HUB=/^#(sushi|sokoban)$/.test(location.hash); // 从游戏机首页直达进来的,返回键直接回首页
 function initHome(){
   const dpr=DPR();
   [['icoSushi','salmon'],['icoSoko','cat']].forEach(pair=>{const cv=$('#'+pair[0]);const k=Math.max(2,Math.round(4*dpr));cv.width=16*k;cv.height=16*k;cv.getContext('2d').drawImage(getSprite(pair[1],k),0,0);});
@@ -1101,7 +1102,7 @@ function route(){
   if(name==='sokoban')Soko.show();else Soko.hide();
   if(name==='home'){updateHomeStats();closeDialog($('#homeOverlay'));}
 }
-document.addEventListener('click',e=>{const b=e.target.closest('[data-go]');if(!b)return;const to=b.dataset.go;if(to==='more'){location.href='../index.html';return;}location.hash=to==='home'?'':('#'+to);});
+document.addEventListener('click',e=>{const b=e.target.closest('[data-go]');if(!b)return;const to=b.dataset.go;if(to==='more'||(to==='home'&&FROM_HUB)){location.href='../index.html';return;}location.hash=to==='home'?'':('#'+to);});
 document.addEventListener('touchmove',e=>{if(e.target.closest('.stage,.dpad'))e.preventDefault();},{passive:false});
 Sushi.init();Soko.init();initHome();
 window.addEventListener('hashchange',route);route();
