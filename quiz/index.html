@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#2b2926">
+<title>智能脑王</title>
+<link rel="stylesheet" href="../common/shell.css">
+<style>
+.scr{display:flex;flex-direction:column;height:100%;min-height:0}
+.body{flex:1;min-height:0;overflow:auto;padding:12px 12px 10px;display:flex;flex-direction:column;gap:10px}
+.title{margin:2px 0 0;font-size:22px;letter-spacing:.04em;line-height:1.2}
+.sub{margin:0;color:var(--ink-soft);font-size:13px;font-family:var(--font-mono)}
+.cat{display:grid;grid-template-columns:46px 1fr auto;align-items:center;gap:12px;padding:10px 12px;background:var(--lcd-card);border:2px solid var(--ink);border-radius:8px;box-shadow:3px 3px 0 var(--ink);text-align:left;font:inherit;color:inherit;cursor:pointer;width:100%}
+.cat:active{transform:translate(2px,2px);box-shadow:1px 1px 0 var(--ink)}
+.cat .tag{width:46px;height:46px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:22px;border:2px solid var(--ink);font-family:"KaiTi","STKaiti","楷体",serif}
+.cat .n{font-weight:700;font-size:16px;display:block}
+.cat .p{display:block;color:var(--ink-soft);font-size:12px;margin-top:2px;font-family:var(--font-mono)}
+.cat .go{font-family:var(--font-mono);font-weight:700;color:var(--accent);font-size:20px}
+.rank{display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:var(--lcd-deep);border:2px solid var(--ink);border-radius:8px;font-family:var(--font-mono);font-weight:700;font-size:13px}
+.rank b{color:var(--accent);font-size:16px}
+.timer{height:12px;border:2px solid var(--ink);background:#fff;padding:1px;border-radius:2px}
+.timer i{display:block;height:100%;background:repeating-linear-gradient(90deg,var(--green) 0 4px,var(--green-light) 4px 6px);transition:width .1s linear}
+.timer.low i{background:repeating-linear-gradient(90deg,var(--red) 0 4px,var(--red-light) 4px 6px)}
+.qcard{background:var(--lcd-card);border:2px solid var(--ink);border-radius:8px;box-shadow:3px 3px 0 var(--ink);padding:14px 14px 12px}
+.qcard .qn{font-family:var(--font-mono);font-size:12px;color:var(--ink-soft);letter-spacing:.1em;margin-bottom:6px}
+.qcard .q{font-size:17px;font-weight:700;line-height:1.5;text-wrap:balance}
+.opts{display:flex;flex-direction:column;gap:8px}
+.opt{display:grid;grid-template-columns:30px 1fr;align-items:center;gap:10px;padding:11px 12px;background:var(--lcd-card);border:2px solid var(--ink);border-radius:8px;box-shadow:2px 2px 0 var(--ink);text-align:left;font:inherit;font-size:15px;color:inherit;cursor:pointer;min-height:48px;line-height:1.35}
+.opt .k{width:26px;height:26px;border-radius:50%;border:2px solid var(--ink);display:flex;align-items:center;justify-content:center;font-family:var(--font-mono);font-weight:700;font-size:13px;background:#fff}
+.opt:active{transform:translate(1px,1px);box-shadow:1px 1px 0 var(--ink)}
+.opt:disabled{cursor:default;transform:none}
+.opt.right{background:#d9f2df;border-color:var(--green)}.opt.right .k{background:var(--green);color:#fff;border-color:var(--green)}
+.opt.wrong{background:#fbdcd8;border-color:var(--red)}.opt.wrong .k{background:var(--red);color:#fff;border-color:var(--red)}
+.opt.dim{opacity:.38;text-decoration:line-through}
+.fb{border:2px solid var(--ink);border-radius:8px;padding:10px 12px;background:#fff8dd;font-size:14px;line-height:1.55}
+.fb b{display:block;font-size:15px;margin-bottom:2px}
+.fb.ok{border-color:var(--green)}.fb.ok b{color:var(--green)}
+.fb.no{border-color:var(--red)}.fb.no b{color:var(--red)}
+.fb .note{color:var(--ink)}
+.tools{display:flex;gap:8px;justify-content:space-between;align-items:center}
+.tools button{padding:9px 12px;border:2px solid var(--ink);border-radius:8px;background:var(--lcd-card);font:inherit;font-weight:700;color:var(--ink);box-shadow:2px 2px 0 var(--ink);cursor:pointer;font-family:var(--font-mono);letter-spacing:.06em;font-size:13px}
+.tools button.pri{background:var(--accent);color:#fff;flex:1}
+.tools button:disabled{opacity:.4;box-shadow:none;cursor:default}
+.tools button:active:not(:disabled){transform:translate(2px,2px);box-shadow:0 0 0 var(--ink)}
+.res{text-align:center;padding:6px 0}
+.res .big{font-family:var(--font-mono);font-weight:700;font-size:54px;line-height:1;color:var(--accent);text-shadow:3px 3px 0 var(--ink)}
+.res .grade{display:inline-block;margin-top:6px;padding:3px 14px;border:2px solid var(--ink);border-radius:20px;font-family:var(--font-mono);font-weight:700;letter-spacing:.2em;background:var(--lcd-card)}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.stats div{background:var(--lcd-card);border:2px solid var(--ink);border-radius:8px;padding:8px 10px;font-family:var(--font-mono);font-size:12px;color:var(--ink-soft)}
+.stats div b{display:block;font-size:20px;color:var(--ink);font-variant-numeric:tabular-nums}
+.review{display:flex;flex-direction:column;gap:6px}
+.review div{font-size:13px;padding:6px 10px;border-left:4px solid var(--green);background:var(--lcd-card);border-radius:4px}
+.review div.no{border-left-color:var(--red)}
+.banana{position:absolute;inset:0;z-index:6;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(74,44,21,.55);gap:6px}
+.banana canvas{width:220px;height:220px;animation:bounce .9s ease-in-out infinite alternate;filter:drop-shadow(4px 6px 0 rgba(0,0,0,.35))}
+.banana .say{background:var(--lcd);border:3px solid var(--ink);border-radius:12px;padding:10px 20px;font-size:20px;font-weight:700;box-shadow:4px 4px 0 var(--ink);letter-spacing:.06em}
+.banana .tip{color:#fff;font-family:var(--font-mono);font-size:12px;letter-spacing:.1em;text-shadow:0 1px 0 #000;margin-top:8px}
+@keyframes bounce{from{transform:translateY(0) rotate(-6deg)}to{transform:translateY(-16px) rotate(6deg)}}
+@media (prefers-reduced-motion:reduce){.banana canvas{animation:none}}
+</style>
+</head>
+<body>
+<div id="phone"><div id="screen">
+
+<section id="pick" class="scr">
+  <div class="hud"><span>智能脑王</span><span id="rankTop">答题新手</span><span>总分 <b id="totalTop">0</b></span></div>
+  <div class="body">
+    <h1 class="title">选个分类,开始答题</h1>
+    <p class="sub">每关 10 题 · 每题 20 秒 · 答对按剩余时间加分 · 连对有奖励</p>
+    <div id="cats" class="opts"></div>
+    <div class="rank"><span>称号:<b id="rankName">答题新手</b></span><span id="rankNext"></span></div>
+  </div>
+  <div class="softkeys"><button id="btnHelp">玩法</button><button data-go="../index.html">返回</button></div>
+</section>
+
+<section id="play" class="scr" hidden>
+  <div class="hud"><span id="pCat">古诗词</span><span id="pNo">第 1 关 · 1/10</span><span>得分 <b id="pScore">0</b></span></div>
+  <div class="body">
+    <div class="timer" id="timer"><i id="timerBar"></i></div>
+    <div class="qcard"><div class="qn" id="qMeta">难度 ★</div><div class="q" id="qText"></div></div>
+    <div class="opts" id="opts"></div>
+    <div class="fb" id="fb" hidden></div>
+    <div class="tools"><button id="btnHint">排除一个 ×1</button><button id="btnNext" class="pri" hidden>下一题</button></div>
+  </div>
+  <div class="softkeys"><button id="btnQuit">退出本关</button><button data-go="../index.html">返回</button></div>
+</section>
+
+<section id="result" class="scr" hidden>
+  <div class="hud"><span id="rCat">古诗词</span><span id="rStage">第 1 关 结算</span><span id="rRank">答题新手</span></div>
+  <div class="body">
+    <div class="res"><div class="big" id="rScore">0</div><div class="grade" id="rGrade">A</div></div>
+    <div class="stats">
+      <div>答对<b id="rRight">0/10</b></div>
+      <div>用时<b id="rTime">0s</b></div>
+      <div>最高连对<b id="rStreak">0</b></div>
+      <div>累计总分<b id="rTotal">0</b></div>
+    </div>
+    <div class="review" id="review"></div>
+  </div>
+  <div class="softkeys"><button id="btnAgain">重新游玩</button><button id="btnNextStage">下一关</button><button id="btnSwitch">切换分类</button></div>
+</section>
+
+<div class="overlay" id="overlay" hidden></div>
+<div class="banana" id="banana" hidden><canvas id="bananaCv" width="440" height="440"></canvas><div class="say" id="bananaSay">恭喜吃个香蕉~</div><div class="tip">点一下收下香蕉</div></div>
+</div></div>
+<script src="questions.js"></script>
+<script src="../common/shell.js"></script>
+<script>
+(function(){
+'use strict';
+const {$,store,dialog,closeDialog,bindNav}=Shell;
+bindNav();
+const BANK=window.QUIZ_BANK;
+const PER=10,TIME=20;
+const RANKS=[[0,'答题新手'],[1500,'知识达人'],[4000,'学霸'],[8000,'博士'],[15000,'脑王']];
+const prog=store.get('aigame.quiz.v1',{cats:{},used:{},total:0});
+const scr={pick:$('#pick'),play:$('#play'),result:$('#result')};
+const S={cat:null,stage:1,qs:[],i:0,score:0,right:0,streak:0,maxStreak:0,hint:1,timer:0,timeLeft:TIME,answered:false,t0:0,elapsed:0,log:[],locked:false};
+function show(name){for(const k in scr)scr[k].hidden=k!==name;}
+function catProg(id){return prog.cats[id]||(prog.cats[id]={cleared:0,best:0,right:0,total:0});}
+function save(){store.set('aigame.quiz.v1',prog);}
+function rankOf(total){let r=RANKS[0],next=null;for(let i=0;i<RANKS.length;i++){if(total>=RANKS[i][0])r=RANKS[i];else{next=RANKS[i];break;}}return {name:r[1],next};}
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));const t=a[i];a[i]=a[j];a[j]=t;}return a;}
+/* ---------- 分类选择 ---------- */
+function renderPick(){
+  const r=rankOf(prog.total);$('#rankTop').textContent=r.name;$('#totalTop').textContent=prog.total;$('#rankName').textContent=r.name;
+  $('#rankNext').textContent=r.next?('再得 '+(r.next[0]-prog.total)+' 分升级为'+r.next[1]):'已是最高称号';
+  const box=$('#cats');box.innerHTML='';
+  for(const c of BANK.categories){const p=catProg(c.id);const n=BANK.questions[c.id].length;
+    const b=document.createElement('button');b.className='cat';
+    b.innerHTML='<span class="tag" style="background:'+c.color+'">'+c.tag+'</span><span><span class="n">'+c.name+'</span><span class="p">题库 '+n+' 题 · 已闯 '+p.cleared+' 关 · 最高 '+p.best+' 分'+(p.total?' · 正确率 '+Math.round(p.right/p.total*100)+'%':'')+'</span></span><span class="go">▶</span>';
+    b.addEventListener('click',()=>startStage(c,p.cleared+1));box.appendChild(b);}
+}
+/* ---------- 出题 ---------- */
+function pickQuestions(cat,stage){
+  const all=BANK.questions[cat.id];let used=prog.used[cat.id]||[];
+  let idx=[];for(let i=0;i<all.length;i++)if(used.indexOf(i)<0)idx.push(i);
+  if(idx.length<PER){used=[];idx=all.map((_,i)=>i);}
+  const target=Math.min(3,1+Math.floor((stage-1)/2));
+  idx.sort((a,b)=>(Math.abs(all[a][3]-target)+Math.random()*0.9)-(Math.abs(all[b][3]-target)+Math.random()*0.9));
+  const chosen=shuffle(idx.slice(0,PER)); // 题目顺序随机,选项顺序在下面也随机打乱
+  prog.used[cat.id]=used.concat(chosen);save();
+  return chosen.map(i=>{const q=all[i];const opts=shuffle([q[1]].concat(q[2]));return {q:q[0],opts,ans:opts.indexOf(q[1]),diff:q[3],note:q[4]};});
+}
+function startStage(cat,stage){
+  S.cat=cat;S.stage=stage;S.qs=pickQuestions(cat,stage);S.i=0;S.score=0;S.right=0;S.streak=0;S.maxStreak=0;S.hint=1;S.log=[];S.t0=Date.now();S.elapsed=0;
+  $('#pCat').textContent=cat.name;show('play');showQuestion();
+}
+function showQuestion(){
+  const q=S.qs[S.i];S.answered=false;S.locked=false;S.timeLeft=TIME;
+  $('#pNo').textContent='第 '+S.stage+' 关 · '+(S.i+1)+'/'+PER;$('#pScore').textContent=S.score;
+  $('#qMeta').textContent='难度 '+'★'.repeat(q.diff)+'☆'.repeat(3-q.diff)+(S.streak>=2?' · 连对 '+S.streak:'');
+  $('#qText').textContent=q.q;
+  const box=$('#opts');box.innerHTML='';
+  q.opts.forEach((o,k)=>{const b=document.createElement('button');b.className='opt';b.innerHTML='<span class="k">'+'ABCD'[k]+'</span><span>'+o+'</span>';b.addEventListener('click',()=>answer(k));box.appendChild(b);});
+  $('#fb').hidden=true;$('#btnNext').hidden=true;$('#btnHint').disabled=S.hint<=0;$('#btnHint').textContent='排除一个 ×'+S.hint;
+  clearInterval(S.timer);S.timer=setInterval(tick,100);tick();
+}
+function tick(){
+  if(S.answered)return;S.timeLeft=Math.max(0,S.timeLeft-0.1);
+  $('#timerBar').style.width=(S.timeLeft/TIME*100)+'%';$('#timer').classList.toggle('low',S.timeLeft<5);
+  if(S.timeLeft<=0)answer(-1);
+}
+function answer(k){
+  if(S.answered)return;S.answered=true;clearInterval(S.timer);
+  const q=S.qs[S.i];const ok=k===q.ans;const btns=$('#opts').querySelectorAll('.opt');
+  btns.forEach((b,i)=>{b.disabled=true;if(i===q.ans)b.classList.add('right');else if(i===k)b.classList.add('wrong');});
+  let gain=0;
+  if(ok){S.right++;S.streak++;S.maxStreak=Math.max(S.maxStreak,S.streak);gain=100+Math.ceil(S.timeLeft)*5+Math.min(100,Math.max(0,S.streak-1)*20);S.score+=gain;}
+  else S.streak=0;
+  S.log.push({q:q.q,ok,ans:q.opts[q.ans]});
+  const fb=$('#fb');fb.hidden=false;fb.className='fb '+(ok?'ok':'no');
+  fb.innerHTML='<b>'+(ok?'答对了 +'+gain:(k<0?'时间到,正确答案是 '+q.opts[q.ans]:'答错了,正确答案是 '+q.opts[q.ans]))+'</b><span class="note">'+(q.note||'')+'</span>';
+  $('#pScore').textContent=S.score;$('#btnHint').disabled=true;
+  const nb=$('#btnNext');nb.hidden=false;nb.textContent=S.i+1>=PER?'查看结算':'下一题';
+}
+function next(){S.i++;if(S.i>=PER)finish();else showQuestion();}
+function useHint(){
+  if(S.answered||S.hint<=0)return;const q=S.qs[S.i];const btns=$('#opts').querySelectorAll('.opt');
+  const wrong=[];btns.forEach((b,i)=>{if(i!==q.ans&&!b.classList.contains('dim'))wrong.push(i);});if(!wrong.length)return;
+  const i=wrong[Math.floor(Math.random()*wrong.length)];btns[i].classList.add('dim');btns[i].disabled=true;S.hint--;$('#btnHint').disabled=true;$('#btnHint').textContent='排除一个 ×'+S.hint;
+}
+/* ---------- 结算 ---------- */
+function finish(){
+  clearInterval(S.timer);S.elapsed=Math.round((Date.now()-S.t0)/1000);
+  const p=catProg(S.cat.id);p.cleared=Math.max(p.cleared,S.stage);p.best=Math.max(p.best,S.score);p.right+=S.right;p.total+=PER;prog.total+=S.score;save();
+  const grade=S.right>=10?'S':S.right>=8?'A':S.right>=6?'B':'C';
+  $('#rCat').textContent=S.cat.name;$('#rStage').textContent='第 '+S.stage+' 关 结算';$('#rRank').textContent=rankOf(prog.total).name;
+  $('#rScore').textContent=S.score;$('#rGrade').textContent=grade+' 级';$('#rRight').textContent=S.right+'/'+PER;$('#rTime').textContent=S.elapsed+'s';$('#rStreak').textContent=S.maxStreak;$('#rTotal').textContent=prog.total;
+  const rv=$('#review');rv.innerHTML='';S.log.forEach((l,i)=>{const d=document.createElement('div');if(!l.ok)d.className='no';d.textContent=(i+1)+'. '+l.q+(l.ok?'':'  →  '+l.ans);rv.appendChild(d);});
+  show('result');
+  setTimeout(()=>{drawBanana();$('#bananaSay').textContent=grade==='S'?'全对!恭喜吃个大香蕉~':'恭喜吃个香蕉~';$('#banana').hidden=false;},450);
+}
+function drawBanana(){
+  const cv=$('#bananaCv'),g=cv.getContext('2d');g.setTransform(1,0,0,1,0,0);g.clearRect(0,0,440,440);g.scale(2,2);g.translate(110,110);g.rotate(-0.35);
+  g.beginPath();g.moveTo(-82,-10);g.quadraticCurveTo(0,110,86,-22);g.quadraticCurveTo(10,40,-82,-10);g.closePath();
+  g.fillStyle='#f5d033';g.fill();g.lineWidth=4;g.lineJoin='round';g.strokeStyle='#8a5a1a';g.stroke();
+  g.beginPath();g.moveTo(-70,-4);g.quadraticCurveTo(0,72,74,-16);g.strokeStyle='#d9a521';g.lineWidth=3;g.stroke();
+  g.beginPath();g.moveTo(-60,4);g.quadraticCurveTo(0,90,66,-4);g.strokeStyle='rgba(255,248,180,.9)';g.lineWidth=5;g.stroke();
+  g.fillStyle='#6b4a1a';g.beginPath();g.arc(-82,-10,6,0,6.28);g.fill();g.beginPath();g.arc(86,-22,7,0,6.28);g.fill();
+  g.fillStyle='#4a2c15';g.beginPath();g.arc(-30,30,3,0,6.28);g.arc(-10,42,2.5,0,6.28);g.fill();
+}
+$('#banana').addEventListener('click',()=>{$('#banana').hidden=true;});
+$('#btnNext').addEventListener('click',next);
+$('#btnHint').addEventListener('click',useHint);
+$('#btnQuit').addEventListener('click',()=>{clearInterval(S.timer);dialog($('#overlay'),{title:'退出本关?',lines:['本关得分不会保存'],buttons:[{label:'继续答题',primary:true,onClick(){if(!S.answered){S.timer=setInterval(tick,100);}}},{label:'退出',onClick(){renderPick();show('pick');}}]});});
+$('#btnAgain').addEventListener('click',()=>startStage(S.cat,S.stage));
+$('#btnNextStage').addEventListener('click',()=>startStage(S.cat,S.stage+1));
+$('#btnSwitch').addEventListener('click',()=>{renderPick();show('pick');});
+$('#btnHelp').addEventListener('click',()=>dialog($('#overlay'),{title:'怎么玩',html:'<div class="txt">选一个分类开始,每关 <b>10 题</b>,每题 <b>20 秒</b>。<br>选了答案立刻显示对错和解析,点“下一题”继续。<br>答对得 100 分,剩余时间每秒 +5,连对越多奖励越高。每关可以<b>排除一个错误选项</b>一次。<br>10 题答完看结算,能重玩、闯下一关或换分类。总分越高称号越高,题目不重复,做完一轮才会重新出现。</div>',buttons:[{label:'知道了',primary:true}]}));
+document.addEventListener('visibilitychange',()=>{if(document.hidden&&!scr.play.hidden&&!S.answered){/* 切后台时不倒计时 */clearInterval(S.timer);}else if(!document.hidden&&!scr.play.hidden&&!S.answered){clearInterval(S.timer);S.timer=setInterval(tick,100);}});
+renderPick();show('pick');
+// 调试用:#demo 直接进第一类第一关;#demo-result 直接看结算页
+if(location.hash==='#demo')startStage(BANK.categories[0],1);
+else if(location.hash==='#demo-result'){S.cat=BANK.categories[0];S.stage=1;S.qs=pickQuestions(S.cat,1);S.right=8;S.score=1240;S.maxStreak=5;S.t0=Date.now()-98000;S.log=S.qs.map((q,i)=>({q:q.q,ok:i!==2&&i!==6,ans:q.opts[q.ans]}));finish();}
+})();
+</script>
+</body>
+</html>
