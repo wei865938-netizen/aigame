@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#2b2926">
+<title>中国象棋</title>
+<link rel="stylesheet" href="../common/shell.css">
+<style>.stage{background:var(--lcd)} .hud .turn{color:var(--accent)} .hud .chk{color:var(--red)}</style>
+</head>
+<body>
+<div id="phone"><div id="screen">
+<div class="hud"><span>你执 <b id="youSide">红</b> · <span id="levelName">普通</span></span><span class="turn" id="turn">你走</span><span class="chk" id="status"></span><span>胜 <b id="wins">0</b> 负 <b id="losses">0</b></span></div>
+<div class="stage" id="stage"><canvas id="cv"></canvas><div class="hint" id="hint" style="color:var(--ink);text-shadow:none">点自己的棋子,再点要走的位置</div></div>
+<div class="softkeys"><button id="btnUndo">悔棋</button><button id="btnRestart">重开</button><button id="btnSet">设置</button><button data-go="../index.html">返回</button></div>
+<div class="overlay" id="overlay" hidden></div>
+</div></div>
+<script src="engine.js"></script>
+<script src="../common/shell.js"></script>
+<script>
+(function(){
+'use strict';
+const {$,store,fit,watchResize,pointerPos,dialog,closeDialog,bindNav,text}=Shell;
+bindNav();
+const X=Xiangqi;
+const cv=$('#cv'),g=cv.getContext('2d'),stage=$('#stage'),overlay=$('#overlay'),hint=$('#hint');
+const LEVELS=['','简单','普通','困难'];
+const set=store.get('aigame.xiangqi.set',{level:2,humanRed:true});
+const rec=store.get('aigame.xiangqi.rec',{w:0,l:0,d:0});
+let W=0,H=0,dpr=1,cell=0,ox=0,oy=0;
+const S={board:X.INIT.slice(),human:0,ai:1,turn:0,hist:[],keys:[],sel:-1,targets:[],thinking:false,over:false,modal:null,anim:null,check:false,reqId:0};
+let worker=null;
+try{worker=new Worker('worker.js');worker.onmessage=e=>{const d=e.data;if(d.id!==S.reqId||!S.thinking)return;applyAi(d.move);};worker.onerror=()=>{worker=null;if(S.thinking)aiMoveSync();};}catch(e){worker=null;}
+function resize(){const f=fit(cv,stage);W=f.w;H=f.h;dpr=f.dpr;cell=Math.min(W/9.8,H/10.9);ox=(W-cell*8)/2;oy=(H-cell*9)/2;render();}
+const flip=()=>S.human===1;
+function disp(r,c){return flip()?[9-r,8-c]:[r,c];}
+function newGame(){
+  S.board=X.INIT.slice();S.human=set.humanRed?0:1;S.ai=1-S.human;S.turn=0;S.hist=[];S.keys=[X.key(S.board,0)];S.sel=-1;S.targets=[];S.thinking=false;S.over=false;S.modal=null;S.anim=null;S.check=false;S.reqId++;
+  closeDialog(overlay);hint.hidden=false;hud();render();
+  if(S.turn===S.ai)aiMove();
+}
+function hud(){$('#youSide').textContent=S.human===0?'红':'黑';$('#levelName').textContent=LEVELS[set.level];$('#wins').textContent=rec.w;$('#losses').textContent=rec.l;
+  $('#turn').textContent=S.over?'已结束':(S.thinking?'电脑思考中…':(S.turn===S.human?'你走':'电脑走'));$('#status').textContent=S.check&&!S.over?'将军!':'';}
+function legalFrom(i){return X.genLegal(S.board,S.turn).filter(m=>m.from===i).map(m=>m.to);}
+function doMove(from,to){
+  const piece=S.board[from];const cap=X.make(S.board,from,to);S.hist.push({from,to,cap});const next=1-S.turn;S.turn=next;S.keys.push(X.key(S.board,next));
+  S.sel=-1;S.targets=[];hint.hidden=true;
+  S.anim={from,to,piece,t:0};
+  const over=X.gameOver(S.board,next);S.check=X.inCheck(S.board,next);
+  if(over){finish(next===S.human?'lose':'win',over);}
+  else if(S.hist.length>=400){finish('draw','long');}
+  else{hud();if(next===S.ai)aiMove();}
+}
+function finish(res,why){S.over=true;S.thinking=false;if(res==='win')rec.w++;else if(res==='lose')rec.l++;else rec.d++;store.set('aigame.xiangqi.rec',rec);hud();
+  const title=res==='win'?(why==='checkmate'?'将死!你赢了':'困毙!你赢了'):(res==='lose'?(why==='checkmate'?'你被将死了':'你被困毙了'):'和棋');
+  S.modal=()=>dialog(overlay,{title,lines:['共 '+S.hist.length+' 步 · 难度 '+LEVELS[set.level],'战绩 '+rec.w+' 胜 '+rec.l+' 负'],buttons:[{label:'再来一局',primary:true,onClick(){newGame();}},{label:'看棋盘',onClick(){S.modal=null;}}]});
+  setTimeout(()=>{if(S.over&&S.modal)S.modal();},700);}
+function aiMove(){
+  S.thinking=true;hud();const id=++S.reqId;
+  const msg={id,board:S.board.slice(),side:S.ai,level:set.level,timeMs:set.level===1?300:(set.level===2?900:2200),history:S.keys.slice(-40)};
+  if(worker){try{worker.postMessage(msg);return;}catch(e){worker=null;}}
+  aiMoveSync(msg);
+}
+function aiMoveSync(msg){msg=msg||{id:S.reqId,board:S.board.slice(),side:S.ai,level:set.level,timeMs:set.level===1?300:(set.level===2?900:2200),history:S.keys.slice(-40)};
+  setTimeout(()=>{if(msg.id!==S.reqId||!S.thinking)return;applyAi(X.chooseMove(msg.board,msg.side,{level:msg.level,timeMs:msg.timeMs,history:msg.history}));},60);}
+function applyAi(mv){S.thinking=false;if(!mv){finish('win','stalemate');return;}doMove(mv.from,mv.to);render();}
+cv.addEventListener('pointerdown',e=>{
+  if(S.modal||S.over||S.thinking||S.turn!==S.human||S.anim)return;e.preventDefault();
+  const p=pointerPos(cv,e);let c=Math.round((p.x-ox)/cell),r=Math.round((p.y-oy)/cell);if(r<0||c<0||r>9||c>8)return;
+  if(Math.hypot(p.x-(ox+c*cell),p.y-(oy+r*cell))>cell*0.55)return;
+  if(flip()){r=9-r;c=8-c;}
+  const i=r*9+c,pc=S.board[i];
+  if(S.sel>=0&&S.targets.indexOf(i)>=0){doMove(S.sel,i);render();return;}
+  if(pc&&X.sideOf(pc)===S.human){S.sel=i;S.targets=legalFrom(i);}else{S.sel=-1;S.targets=[];}
+  render();
+});
+function undo(){if(S.thinking||S.modal||S.anim)return;if(!S.hist.length)return;
+  if(S.over){S.over=false;}
+  let n=(S.turn===S.human)?2:1;
+  while(n-->0&&S.hist.length){const h=S.hist.pop();X.unmake(S.board,h.from,h.to,h.cap);S.keys.pop();S.turn=1-S.turn;}
+  S.sel=-1;S.targets=[];S.check=X.inCheck(S.board,S.turn);hud();render();
+  if(S.turn===S.ai)aiMove();}
+function settings(){
+  S.modal=settings;
+  dialog(overlay,{title:'设置',build(d){
+    const row=(label,opts,cur,on)=>{const p=document.createElement('p');p.textContent=label;d.appendChild(p);const bs=document.createElement('div');bs.className='btns';bs.style.marginTop='4px';
+      opts.forEach(o=>{const b=document.createElement('button');b.textContent=o.label;if(o.v===cur)b.className='pri';b.addEventListener('click',()=>{on(o.v);closeDialog(overlay);S.modal=null;store.set('aigame.xiangqi.set',set);newGame();});bs.appendChild(b);});d.appendChild(bs);};
+    row('难度(困难档每步想 2 秒左右)',[{label:'简单',v:1},{label:'普通',v:2},{label:'困难',v:3}],set.level,v=>{set.level=v;});
+    row('执子(改动后重开一局)',[{label:'执红先走',v:true},{label:'执黑后走',v:false}],set.humanRed,v=>{set.humanRed=v;});
+  },buttons:[{label:'关闭',onClick(){S.modal=null;}}]});
+}
+/* 绘制 */
+function pos(r,c){const d=disp(r,c);return [ox+d[1]*cell,oy+d[0]*cell];}
+function render(){
+  g.setTransform(1,0,0,1,0,0);g.clearRect(0,0,W,H);
+  const x0=ox-cell*0.6,y0=oy-cell*0.6,bw=cell*8+cell*1.2,bh=cell*9+cell*1.2;
+  g.fillStyle='#e8c98a';Shell.rr(g,x0,y0,bw,bh,6*dpr);g.fill();g.lineWidth=3*dpr;g.strokeStyle='#5a3a1a';g.stroke();
+  g.strokeStyle='#4a2c15';g.lineWidth=1.3*dpr;
+  for(let r=0;r<10;r++){g.beginPath();g.moveTo(ox,oy+r*cell);g.lineTo(ox+8*cell,oy+r*cell);g.stroke();}
+  for(let c=0;c<9;c++){if(c===0||c===8){g.beginPath();g.moveTo(ox+c*cell,oy);g.lineTo(ox+c*cell,oy+9*cell);g.stroke();}
+    else{g.beginPath();g.moveTo(ox+c*cell,oy);g.lineTo(ox+c*cell,oy+4*cell);g.stroke();g.beginPath();g.moveTo(ox+c*cell,oy+5*cell);g.lineTo(ox+c*cell,oy+9*cell);g.stroke();}}
+  for(const top of [0,7]){g.beginPath();g.moveTo(ox+3*cell,oy+top*cell);g.lineTo(ox+5*cell,oy+(top+2)*cell);g.moveTo(ox+5*cell,oy+top*cell);g.lineTo(ox+3*cell,oy+(top+2)*cell);g.stroke();}
+  g.lineWidth=2.5*dpr;g.strokeRect(ox,oy,8*cell,9*cell);
+  // 兵/炮位标记
+  const mark=(r,c)=>{const x=ox+c*cell,y=oy+r*cell,s=cell*0.08,gp=cell*0.06;g.lineWidth=1.2*dpr;for(const sx of [-1,1])for(const sy of [-1,1]){if((c===0&&sx<0)||(c===8&&sx>0))continue;g.beginPath();g.moveTo(x+sx*gp,y+sy*(gp+s));g.lineTo(x+sx*gp,y+sy*gp);g.lineTo(x+sx*(gp+s),y+sy*gp);g.stroke();}};
+  for(const r of [3,6])for(const c of [0,2,4,6,8])mark(r,c);for(const r of [2,7])for(const c of [1,7])mark(r,c);
+  g.fillStyle='rgba(74,44,21,.75)';const rf=flip();text(g,rf?'汉 界':'楚 河',ox+2*cell,oy+4.5*cell,cell*0.42,'rgba(74,44,21,.75)',null,'center','"KaiTi","STKaiti","楷体",serif');text(g,rf?'楚 河':'汉 界',ox+6*cell,oy+4.5*cell,cell*0.42,'rgba(74,44,21,.75)',null,'center','"KaiTi","STKaiti","楷体",serif');
+  // 上一步标记
+  const last=S.hist.length?S.hist[S.hist.length-1]:null;
+  if(last){for(const i of [last.from,last.to]){const [x,y]=pos((i-i%9)/9,i%9);g.strokeStyle='rgba(240,138,60,.9)';g.lineWidth=2*dpr;g.strokeRect(x-cell*0.46,y-cell*0.46,cell*0.92,cell*0.92);}}
+  // 可走点
+  for(const t of S.targets){const [x,y]=pos((t-t%9)/9,t%9);if(S.board[t]){g.strokeStyle='rgba(217,69,58,.9)';g.lineWidth=3*dpr;g.beginPath();g.arc(x,y,cell*0.48,0,6.28);g.stroke();}else{g.fillStyle='rgba(46,125,79,.75)';g.beginPath();g.arc(x,y,cell*0.13,0,6.28);g.fill();}}
+  // 棋子
+  const a=S.anim;
+  for(let i=0;i<90;i++){const p=S.board[i];if(!p)continue;if(a&&i===a.to)continue;const [x,y]=pos((i-i%9)/9,i%9);drawPiece(x,y,p,i===S.sel);}
+  if(a){const [fx,fy]=pos((a.from-a.from%9)/9,a.from%9),[tx,ty]=pos((a.to-a.to%9)/9,a.to%9);const k=Math.min(1,a.t/0.16);const e=1-(1-k)*(1-k);drawPiece(fx+(tx-fx)*e,fy+(ty-fy)*e,a.piece,false);}
+}
+function drawPiece(x,y,p,sel){
+  const r=cell*0.44,red=X.sideOf(p)===0,col=red?'#c0392b':'#222';
+  g.fillStyle='rgba(0,0,0,.25)';g.beginPath();g.arc(x+2*dpr,y+3*dpr,r,0,6.28);g.fill();
+  const gr=g.createRadialGradient(x-r*0.3,y-r*0.3,r*0.2,x,y,r);gr.addColorStop(0,'#fff8e6');gr.addColorStop(1,'#e2c58f');g.fillStyle=gr;g.beginPath();g.arc(x,y,r,0,6.28);g.fill();
+  g.lineWidth=2*dpr;g.strokeStyle=col;g.stroke();g.beginPath();g.arc(x,y,r*0.84,0,6.28);g.lineWidth=1*dpr;g.stroke();
+  if(sel){g.strokeStyle='#f08a3c';g.lineWidth=3*dpr;g.beginPath();g.arc(x,y,r+3*dpr,0,6.28);g.stroke();}
+  text(g,X.CHARS[p],x,y+cell*0.02,cell*0.5,col,null,'center','"KaiTi","STKaiti","楷体","Noto Serif CJK SC",serif');
+}
+$('#btnUndo').addEventListener('click',undo);
+$('#btnRestart').addEventListener('click',()=>{if(S.anim)return;newGame();});
+$('#btnSet').addEventListener('click',()=>{if(!S.modal)settings();});
+resize();watchResize(stage,resize);
+Shell.makeLoop(dt=>{if(S.anim){S.anim.t+=dt;if(S.anim.t>=0.16)S.anim=null;render();}}).start();
+newGame();
+})();
+</script>
+</body>
+</html>

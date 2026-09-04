@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#2b2926">
+<title>五子棋</title>
+<link rel="stylesheet" href="../common/shell.css">
+<style>.stage{background:var(--lcd)} .hud .turn{color:var(--accent)}</style>
+</head>
+<body>
+<div id="phone"><div id="screen">
+<div class="hud"><span>你执 <b id="youSide">黑</b> · <span id="levelName">普通</span></span><span class="turn" id="turn">你走</span><span>胜 <b id="wins">0</b> 负 <b id="losses">0</b></span></div>
+<div class="stage" id="stage"><canvas id="cv"></canvas><div class="hint" id="hint" style="color:var(--ink);text-shadow:none">点一下选点,再点一次落子</div></div>
+<div class="softkeys"><button id="btnUndo">悔棋</button><button id="btnRestart">重开</button><button id="btnSet">设置</button><button data-go="../index.html">返回</button></div>
+<div class="overlay" id="overlay" hidden></div>
+</div></div>
+<script src="engine.js"></script>
+<script src="../common/shell.js"></script>
+<script>
+(function(){
+'use strict';
+const {$,store,fit,watchResize,pointerPos,dialog,closeDialog,bindNav,text}=Shell;
+bindNav();
+const G=Gomoku,N=G.N;
+const cv=$('#cv'),g=cv.getContext('2d'),stage=$('#stage'),overlay=$('#overlay'),hint=$('#hint');
+const LEVELS=['','简单','普通','困难'];
+const set=store.get('aigame.gomoku.set',{level:2,humanFirst:true});
+const rec=store.get('aigame.gomoku.rec',{w:0,l:0,d:0});
+let W=0,H=0,dpr=1,size=0,cell=0,ox=0,oy=0;
+const S={board:G.newBoard(),human:1,ai:2,turn:1,moves:[],preview:-1,over:false,thinking:false,winCells:null,modal:null};
+function resize(){const f=fit(cv,stage);W=f.w;H=f.h;dpr=f.dpr;size=Math.min(W,H);cell=size/(N+1);ox=(W-size)/2+cell;oy=(H-size)/2+cell;render();}
+function newGame(){
+  S.board=G.newBoard();S.moves=[];S.preview=-1;S.over=false;S.thinking=false;S.winCells=null;S.modal=null;closeDialog(overlay);
+  S.human=set.humanFirst?1:2;S.ai=3-S.human;S.turn=1;hint.hidden=false;hud();
+  if(S.turn===S.ai)aiMove();render();
+}
+function hud(){$('#youSide').textContent=S.human===1?'黑':'白';$('#levelName').textContent=LEVELS[set.level];$('#wins').textContent=rec.w;$('#losses').textContent=rec.l;
+  $('#turn').textContent=S.over?'已结束':(S.thinking?'电脑思考中…':(S.turn===S.human?'你走':'电脑走'));}
+function place(i,who){S.board[i]=who;S.moves.push(i);S.preview=-1;hint.hidden=true;const win=G.isWin(S.board,i%N,Math.floor(i/N));
+  if(win){S.winCells=win;finish(who===S.human?'win':'lose');return true;}
+  if(S.moves.length>=N*N){finish('draw');return true;}
+  S.turn=3-who;hud();return false;}
+function finish(res){S.over=true;S.thinking=false;if(res==='win')rec.w++;else if(res==='lose')rec.l++;else rec.d++;store.set('aigame.gomoku.rec',rec);hud();
+  S.modal=()=>dialog(overlay,{title:res==='win'?'你赢了!':(res==='lose'?'电脑赢了':'和棋'),lines:['共 '+S.moves.length+' 手 · 难度 '+LEVELS[set.level],'战绩 '+rec.w+' 胜 '+rec.l+' 负'],buttons:[{label:'再来一局',primary:true,onClick(){newGame();}},{label:'看棋盘',onClick(){S.modal=null;}}]});
+  setTimeout(()=>{if(S.over&&S.modal)S.modal();},600);}
+function aiMove(){S.thinking=true;hud();setTimeout(()=>{if(S.over||S.turn!==S.ai)return;const mv=G.chooseMove(S.board,S.ai,set.level);S.thinking=false;if(mv>=0)place(mv,S.ai);else finish('draw');render();},120);}
+cv.addEventListener('pointerdown',e=>{
+  if(S.modal||S.over||S.thinking||S.turn!==S.human)return;e.preventDefault();
+  const p=pointerPos(cv,e);const x=Math.round((p.x-ox)/cell),y=Math.round((p.y-oy)/cell);
+  if(x<0||y<0||x>=N||y>=N)return;const i=y*N+x;if(S.board[i])return;
+  if(Math.hypot(p.x-(ox+x*cell),p.y-(oy+y*cell))>cell*0.6)return;
+  if(S.preview===i){if(!place(i,S.human))aiMove();}else S.preview=i;
+  render();
+});
+function undo(){if(S.thinking||S.modal)return;if(!S.moves.length)return;
+  if(S.over){S.over=false;S.winCells=null;}
+  const n=(S.moves.length&&S.board[S.moves[S.moves.length-1]]===S.ai)?2:1;
+  for(let k=0;k<n&&S.moves.length;k++){const i=S.moves.pop();S.board[i]=0;}
+  S.turn=S.human;S.preview=-1;hud();render();}
+function settings(){
+  S.modal=settings;
+  dialog(overlay,{title:'设置',build(d){
+    const row=(label,opts,cur,on)=>{const p=document.createElement('p');p.textContent=label;d.appendChild(p);const bs=document.createElement('div');bs.className='btns';bs.style.marginTop='4px';
+      opts.forEach(o=>{const b=document.createElement('button');b.textContent=o.label;if(o.v===cur)b.className='pri';b.addEventListener('click',()=>{on(o.v);closeDialog(overlay);S.modal=null;store.set('aigame.gomoku.set',set);newGame();});bs.appendChild(b);});d.appendChild(bs);};
+    row('难度',[{label:'简单',v:1},{label:'普通',v:2},{label:'困难',v:3}],set.level,v=>{set.level=v;});
+    row('先后手(改动后重开一局)',[{label:'我先(黑)',v:true},{label:'电脑先(黑)',v:false}],set.humanFirst,v=>{set.humanFirst=v;});
+  },buttons:[{label:'关闭',onClick(){S.modal=null;}}]});
+}
+function render(){
+  g.setTransform(1,0,0,1,0,0);g.clearRect(0,0,W,H);
+  const x0=ox-cell*0.75,y0=oy-cell*0.75,bw=cell*(N-1)+cell*1.5;
+  g.fillStyle='#dcb35c';Shell.rr(g,x0,y0,bw,bw,6*dpr);g.fill();g.lineWidth=3*dpr;g.strokeStyle='#5a3a1a';g.stroke();
+  g.strokeStyle='rgba(90,58,26,.35)';g.lineWidth=1*dpr;for(let k=0;k<12;k++){g.beginPath();g.moveTo(x0,y0+bw*(k+0.5)/12);g.bezierCurveTo(x0+bw*0.3,y0+bw*(k+0.7)/12,x0+bw*0.7,y0+bw*(k+0.3)/12,x0+bw,y0+bw*(k+0.5)/12);g.stroke();}
+  g.strokeStyle='#4a2c15';g.lineWidth=1.2*dpr;
+  for(let k=0;k<N;k++){g.beginPath();g.moveTo(ox+k*cell,oy);g.lineTo(ox+k*cell,oy+(N-1)*cell);g.stroke();g.beginPath();g.moveTo(ox,oy+k*cell);g.lineTo(ox+(N-1)*cell,oy+k*cell);g.stroke();}
+  g.fillStyle='#4a2c15';for(const s of [[7,7],[3,3],[11,3],[3,11],[11,11]]){g.beginPath();g.arc(ox+s[0]*cell,oy+s[1]*cell,cell*0.12,0,6.28);g.fill();}
+  const last=S.moves.length?S.moves[S.moves.length-1]:-1;
+  for(let i=0;i<N*N;i++){const v=S.board[i];if(!v)continue;drawStone(ox+(i%N)*cell,oy+Math.floor(i/N)*cell,v,1,i===last);}
+  if(S.preview>=0&&!S.over){drawStone(ox+(S.preview%N)*cell,oy+Math.floor(S.preview/N)*cell,S.human,0.45,false);}
+  if(S.winCells){g.strokeStyle='rgba(240,138,60,.9)';g.lineWidth=cell*0.18;g.lineCap='round';const a=S.winCells[1]||S.winCells[0],b=S.winCells[S.winCells.length-1];let minC=S.winCells[0],maxC=S.winCells[0];for(const c of S.winCells){if(c[0]+c[1]*N<minC[0]+minC[1]*N)minC=c;if(c[0]+c[1]*N>maxC[0]+maxC[1]*N)maxC=c;}g.beginPath();g.moveTo(ox+minC[0]*cell,oy+minC[1]*cell);g.lineTo(ox+maxC[0]*cell,oy+maxC[1]*cell);g.stroke();}
+}
+function drawStone(x,y,v,alpha,last){const r=cell*0.44;g.globalAlpha=alpha;
+  const gr=g.createRadialGradient(x-r*0.35,y-r*0.35,r*0.1,x,y,r);
+  if(v===1){gr.addColorStop(0,'#666');gr.addColorStop(1,'#050505');}else{gr.addColorStop(0,'#fff');gr.addColorStop(1,'#c9c9c9');}
+  g.fillStyle=gr;g.beginPath();g.arc(x,y,r,0,6.28);g.fill();g.lineWidth=1*dpr;g.strokeStyle=v===1?'#000':'#999';g.stroke();
+  if(last){g.fillStyle=v===1?'#f08a3c':'#d9453a';g.beginPath();g.arc(x,y,r*0.22,0,6.28);g.fill();}
+  g.globalAlpha=1;}
+$('#btnUndo').addEventListener('click',undo);
+$('#btnRestart').addEventListener('click',()=>{if(S.thinking)return;newGame();});
+$('#btnSet').addEventListener('click',()=>{if(!S.modal&&!S.thinking)settings();});
+resize();watchResize(stage,resize);newGame();
+})();
+</script>
+</body>
+</html>
