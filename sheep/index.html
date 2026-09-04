@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#2b2926">
+<title>羊了个羊</title>
+<link rel="stylesheet" href="../common/shell.css">
+<style>
+.stage{background:linear-gradient(#b5e36a,#9ad64f 60%,#8fcc4a);overflow:hidden}
+.grass{position:absolute;color:#4f8a2a;font-size:14px;font-weight:700;opacity:.8;pointer-events:none;font-family:serif}
+.tile{position:absolute;width:44px;height:44px;border-radius:8px;background:#fdf6e3 center/70% no-repeat;border:2px solid #3f5a25;box-shadow:0 4px 0 #5d8a33,0 6px 4px rgba(0,0,0,.25);transition:left .22s ease,top .22s ease,transform .22s ease,opacity .2s;cursor:pointer;transform-origin:center;box-sizing:border-box}
+.tile.covered{filter:brightness(.55) saturate(.7);cursor:default}
+.tile.inslot{box-shadow:0 2px 0 #5d8a33;transform:scale(.92)}
+.tile.gone{opacity:0;transform:scale(.2);pointer-events:none}
+.tile.flip{animation:flip .35s ease}
+@keyframes flip{0%{transform:rotateY(0)}50%{transform:rotateY(90deg)}100%{transform:rotateY(0)}}
+.slotbar{position:absolute;background:#8b5a2b;border:3px solid #5a3616;border-radius:10px;box-shadow:inset 0 0 0 3px #a8703a,0 4px 0 #4a2c15}
+.slotbar .post{position:absolute;top:-12px;width:10px;height:18px;background:#a8703a;border:2px solid #5a3616;border-radius:3px}
+.slotbar .cell{position:absolute;border-radius:6px;background:rgba(0,0,0,.18);border:2px dashed rgba(255,255,255,.25)}
+.props{position:absolute;display:flex;justify-content:center;gap:14px;left:0;right:0}
+.prop{position:relative;width:78px;height:54px;border:3px solid #1d3f6b;border-radius:14px;color:#fff;font-weight:700;font-size:16px;letter-spacing:.1em;text-shadow:0 2px 0 rgba(0,0,0,.45);box-shadow:0 4px 0 #1d3f6b,0 6px 6px rgba(0,0,0,.3);cursor:pointer;font-family:var(--font-cn)}
+.prop.blue{background:linear-gradient(#5ab6ff,#2f80ed)}
+.prop.pink{background:linear-gradient(#ff8ad4,#e040a0);border-color:#7a1a55;box-shadow:0 4px 0 #7a1a55,0 6px 6px rgba(0,0,0,.3)}
+.prop.cyan{background:linear-gradient(#4fd1ff,#1e88e5)}
+.prop i{position:absolute;right:-8px;top:-10px;width:24px;height:24px;border-radius:50%;background:#2b2926;border:2px solid #fff;color:#ffd23f;font-style:normal;font-size:13px;display:flex;align-items:center;justify-content:center;font-family:var(--font-mono)}
+.prop:disabled{filter:grayscale(1) brightness(.75);cursor:default;box-shadow:0 4px 0 #333}
+.prop:active:not(:disabled){transform:translateY(3px);box-shadow:0 1px 0 #1d3f6b}
+.pill{position:absolute;left:50%;transform:translateX(-50%);top:8px;background:rgba(43,41,38,.85);color:#fff;border-radius:16px;padding:4px 14px;font-family:var(--font-mono);font-weight:700;font-size:13px;letter-spacing:.1em;pointer-events:none;box-shadow:0 2px 0 rgba(0,0,0,.4)}
+</style>
+</head>
+<body>
+<div id="phone"><div id="screen">
+<div class="hud"><span>第 <b id="lvl">1</b> 关</span><span>剩余 <b id="left">0</b> 张</span><span>通关 <b id="wins">0</b> 次</span></div>
+<div class="stage" id="stage"><div class="pill" id="pill">羊了个羊</div><div id="board"></div><div class="slotbar" id="slotbar"></div><div class="props"><button class="prop blue" id="btnOut">移出<i>1</i></button><button class="prop pink" id="btnUndo">撤销<i>1</i></button><button class="prop cyan" id="btnShuf">洗牌<i>1</i></button></div></div>
+<div class="softkeys"><button id="btnRestart">重开</button><button id="btnHelp">玩法</button><button data-go="../index.html">返回</button></div>
+<div class="overlay" id="overlay" hidden></div>
+</div></div>
+<script src="engine.js"></script>
+<script src="../common/shell.js"></script>
+<script>
+(function(){
+'use strict';
+const {$,store,dialog,closeDialog,bindNav}=Shell;
+bindNav();
+const stage=$('#stage'),board=$('#board'),slotbar=$('#slotbar'),overlay=$('#overlay');
+const prog=store.get('aigame.sheep.v1',{level:1,wins:0});
+const S={st:null,els:[],u:44,ox:0,oy:0,slotPos:[],busy:false,props:{out:1,undo:1,shuf:1},snap:null,modal:null};
+/* ---------- 图标 ---------- */
+const ICONS={
+carrot(g){g.fillStyle='#f28c28';g.beginPath();g.moveTo(22,22);g.lineTo(42,22);g.lineTo(32,56);g.closePath();g.fill();g.strokeStyle='#8a4a10';g.lineWidth=2;g.stroke();g.strokeStyle='#c9641a';g.beginPath();g.moveTo(26,32);g.lineTo(34,32);g.moveTo(28,40);g.lineTo(35,40);g.stroke();g.fillStyle='#4caf50';g.strokeStyle='#2e7d32';for(const a of [-0.5,0,0.5]){g.beginPath();g.moveTo(32,22);g.quadraticCurveTo(32+a*22,12,32+a*18,6);g.quadraticCurveTo(32+a*8,12,32,22);g.fill();g.stroke();}},
+bell(g){g.fillStyle='#f5c518';g.beginPath();g.moveTo(18,42);g.quadraticCurveTo(18,16,32,14);g.quadraticCurveTo(46,16,46,42);g.lineTo(50,46);g.lineTo(14,46);g.closePath();g.fill();g.strokeStyle='#8a5a10';g.lineWidth=2;g.stroke();g.fillStyle='#8a5a10';g.beginPath();g.arc(32,50,4,0,6.28);g.fill();g.beginPath();g.arc(32,12,3,0,6.28);g.fill();g.strokeStyle='#fff3a0';g.lineWidth=2;g.beginPath();g.moveTo(24,26);g.quadraticCurveTo(24,20,28,18);g.stroke();},
+scissors(g){g.lineCap='round';g.strokeStyle='#9aa3ad';g.lineWidth=6;g.beginPath();g.moveTo(22,40);g.lineTo(44,12);g.moveTo(42,40);g.lineTo(20,12);g.stroke();g.strokeStyle='#5a6470';g.lineWidth=2;g.beginPath();g.moveTo(22,40);g.lineTo(44,12);g.moveTo(42,40);g.lineTo(20,12);g.stroke();g.strokeStyle='#e53935';g.lineWidth=4;g.beginPath();g.ellipse(20,48,8,6,0.4,0,6.28);g.stroke();g.beginPath();g.ellipse(44,48,8,6,-0.4,0,6.28);g.stroke();},
+stump(g){g.fillStyle='#8d5a2b';g.beginPath();g.moveTo(16,26);g.lineTo(16,50);g.quadraticCurveTo(32,58,48,50);g.lineTo(48,26);g.closePath();g.fill();g.strokeStyle='#4a2c15';g.lineWidth=2;g.stroke();g.strokeStyle='#6b3f1a';g.beginPath();g.moveTo(22,32);g.lineTo(22,48);g.moveTo(32,34);g.lineTo(32,52);g.moveTo(42,32);g.lineTo(42,48);g.stroke();g.fillStyle='#e0b070';g.beginPath();g.ellipse(32,26,16,8,0,0,6.28);g.fill();g.strokeStyle='#4a2c15';g.stroke();g.strokeStyle='#b8824a';g.beginPath();g.ellipse(32,26,10,5,0,0,6.28);g.stroke();g.beginPath();g.ellipse(32,26,4,2,0,0,6.28);g.stroke();},
+corn(g){g.fillStyle='#4caf50';g.strokeStyle='#2e7d32';g.lineWidth=2;g.beginPath();g.moveTo(20,50);g.quadraticCurveTo(6,30,22,14);g.lineTo(28,40);g.closePath();g.fill();g.stroke();g.beginPath();g.moveTo(44,50);g.quadraticCurveTo(58,30,42,14);g.lineTo(36,40);g.closePath();g.fill();g.stroke();g.fillStyle='#f5d033';g.beginPath();g.ellipse(32,32,11,22,0,0,6.28);g.fill();g.strokeStyle='#b8860b';g.stroke();g.fillStyle='#e0a800';for(let r=0;r<5;r++)for(let c=0;c<3;c++){g.beginPath();g.arc(26+c*6,16+r*8,2,0,6.28);g.fill();}},
+bucket(g){g.fillStyle='#e53935';g.beginPath();g.moveTo(16,24);g.lineTo(48,24);g.lineTo(44,54);g.lineTo(20,54);g.closePath();g.fill();g.strokeStyle='#7a1a15';g.lineWidth=2;g.stroke();g.fillStyle='#4aa3ff';g.beginPath();g.ellipse(32,24,16,6,0,0,6.28);g.fill();g.strokeStyle='#1d5fa8';g.stroke();g.strokeStyle='#7a1a15';g.lineWidth=3;g.beginPath();g.moveTo(18,22);g.quadraticCurveTo(32,4,46,22);g.stroke();},
+milk(g){g.fillStyle='#fff';g.beginPath();g.moveTo(24,22);g.lineTo(40,22);g.lineTo(44,30);g.lineTo(44,54);g.lineTo(20,54);g.lineTo(20,30);g.closePath();g.fill();g.strokeStyle='#5a6470';g.lineWidth=2;g.stroke();g.fillStyle='#4aa3ff';g.fillRect(25,12,14,10);g.strokeRect(25,12,14,10);g.fillRect(20,36,24,10);g.fillStyle='#fff';g.beginPath();g.arc(32,41,3,0,6.28);g.fill();},
+yarn(g){g.fillStyle='#e774c2';g.beginPath();g.arc(32,34,18,0,6.28);g.fill();g.strokeStyle='#8a2a6a';g.lineWidth=2;g.stroke();g.strokeStyle='#f7b6e6';g.lineWidth=2.5;for(const k of [-8,0,8]){g.beginPath();g.moveTo(16,34+k);g.quadraticCurveTo(32,26+k,48,34+k);g.stroke();}g.strokeStyle='#8a2a6a';g.lineWidth=2;g.beginPath();g.moveTo(48,44);g.quadraticCurveTo(58,50,52,58);g.stroke();},
+fire(g){g.lineCap='round';g.strokeStyle='#8d5a2b';g.lineWidth=6;g.beginPath();g.moveTo(16,54);g.lineTo(48,46);g.moveTo(16,46);g.lineTo(48,54);g.stroke();g.fillStyle='#ff6f00';g.beginPath();g.moveTo(32,8);g.quadraticCurveTo(48,26,42,42);g.quadraticCurveTo(38,50,32,50);g.quadraticCurveTo(26,50,22,42);g.quadraticCurveTo(16,26,32,8);g.fill();g.strokeStyle='#b23a00';g.lineWidth=2;g.stroke();g.fillStyle='#ffd23f';g.beginPath();g.moveTo(32,24);g.quadraticCurveTo(40,34,36,44);g.quadraticCurveTo(32,48,28,44);g.quadraticCurveTo(24,34,32,24);g.fill();},
+fork(g){g.lineCap='round';g.strokeStyle='#8d5a2b';g.lineWidth=5;g.beginPath();g.moveTo(32,58);g.lineTo(32,26);g.stroke();g.strokeStyle='#9aa3ad';g.lineWidth=4;g.beginPath();g.moveTo(18,26);g.lineTo(46,26);g.moveTo(20,26);g.lineTo(20,8);g.moveTo(32,26);g.lineTo(32,6);g.moveTo(44,26);g.lineTo(44,8);g.stroke();g.strokeStyle='#5a6470';g.lineWidth=1.5;g.beginPath();g.moveTo(18,26);g.lineTo(46,26);g.stroke();},
+cabbage(g){g.fillStyle='#8bc34a';g.strokeStyle='#2e7d32';g.lineWidth=2;g.beginPath();g.arc(32,34,20,0,6.28);g.fill();g.stroke();g.fillStyle='#c5e1a5';g.beginPath();g.ellipse(32,36,12,14,0,0,6.28);g.fill();g.strokeStyle='#7cb342';g.beginPath();g.moveTo(32,22);g.lineTo(32,50);g.moveTo(32,30);g.lineTo(24,40);g.moveTo(32,30);g.lineTo(40,40);g.moveTo(32,40);g.lineTo(26,48);g.moveTo(32,40);g.lineTo(38,48);g.stroke();g.fillStyle='#8bc34a';g.strokeStyle='#2e7d32';g.beginPath();g.moveTo(14,30);g.quadraticCurveTo(10,14,26,14);g.quadraticCurveTo(20,24,22,34);g.fill();g.stroke();g.beginPath();g.moveTo(50,30);g.quadraticCurveTo(54,14,38,14);g.quadraticCurveTo(44,24,42,34);g.fill();g.stroke();},
+glove(g){g.fillStyle='#2f80ed';g.strokeStyle='#123f7a';g.lineWidth=2;g.beginPath();g.moveTo(22,34);g.quadraticCurveTo(8,30,12,20);g.quadraticCurveTo(18,16,24,26);g.closePath();g.fill();g.stroke();g.beginPath();g.moveTo(22,56);g.lineTo(22,30);g.quadraticCurveTo(22,12,34,12);g.quadraticCurveTo(46,12,46,28);g.lineTo(46,56);g.closePath();g.fill();g.stroke();g.fillStyle='#fff';g.fillRect(22,48,24,8);g.strokeRect(22,48,24,8);}
+};
+const ICON_URL={};
+(function(){const sc=2;for(const k in ICONS){const c=document.createElement('canvas');c.width=64*sc;c.height=64*sc;const g=c.getContext('2d');g.scale(sc,sc);g.lineJoin='round';ICONS[k](g);ICON_URL[k]=c.toDataURL();}})();
+/* ---------- 布局 ---------- */
+function layoutMetrics(){
+  const W=stage.clientWidth,H=stage.clientHeight;
+  const u=Math.floor(Math.min(W/9.0,(H-8-10-16-58-10)/11.1));
+  S.u=u;S.ox=Math.floor((W-8.9*u)/2);S.oy=8;
+  const sbTop=S.oy+9.9*u+8,sbH=u*0.95+16,sbW=7*(u*0.95)+6*6+16;const sbLeft=Math.floor((W-sbW)/2);
+  slotbar.style.left=sbLeft+'px';slotbar.style.top=sbTop+'px';slotbar.style.width=sbW+'px';slotbar.style.height=sbH+'px';
+  slotbar.innerHTML='';S.slotPos=[];
+  for(let i=0;i<7;i++){const x=8+i*(u*0.95+6);const cell=document.createElement('div');cell.className='cell';cell.style.left=x+'px';cell.style.top='8px';cell.style.width=(u*0.95)+'px';cell.style.height=(u*0.95)+'px';slotbar.appendChild(cell);S.slotPos.push({x:sbLeft+x-3+u*0.02,y:sbTop-3+8+u*0.02});}
+  for(let i=0;i<8;i++){const p=document.createElement('div');p.className='post';p.style.left=(4+i*(sbW-18)/7)+'px';slotbar.appendChild(p);}
+  document.querySelector('.props').style.top=(sbTop+sbH+14)+'px';
+  for(const g of stage.querySelectorAll('.grass'))g.remove();
+  for(let i=0;i<7;i++){const g=document.createElement('div');g.className='grass';g.textContent='ʬ';g.style.left=(6+((i*137)%(W-30)))+'px';g.style.top=(S.oy+4+((i*211)%Math.max(40,sbTop-60)))+'px';stage.appendChild(g);}
+}
+function tilePos(t){const u=S.u;const zo=t.z<100?Math.min(t.z,8)*2:0;return {x:S.ox+t.x*u,y:S.oy+t.y*u-zo};}
+function renderAll(){
+  const st=S.st;
+  st.tiles.forEach((t,i)=>{const el=S.els[i];el.style.width=S.u+'px';el.style.height=S.u+'px';el.style.backgroundImage='url('+ICON_URL[t.kind]+')';
+    el.classList.toggle('gone',t.state==='gone');el.classList.toggle('inslot',t.state==='slot');
+    if(t.state==='board'){const p=tilePos(t);el.style.left=p.x+'px';el.style.top=p.y+'px';el.style.zIndex=t.z+10;el.classList.toggle('covered',!Sheep.isFree(st,t));}
+    else if(t.state==='slot'){const k=st.slot.indexOf(t.id);const p=S.slotPos[Math.max(0,k)];el.style.left=p.x+'px';el.style.top=p.y+'px';el.style.zIndex=1000+k;el.classList.remove('covered');}
+  });
+  $('#left').textContent=st.tiles.filter(t=>t.state!=='gone').length;
+  $('#btnOut').disabled=S.props.out<=0||S.busy||!!st.over||!st.slot.length;$('#btnUndo').disabled=S.props.undo<=0||S.busy||!S.snap;$('#btnShuf').disabled=S.props.shuf<=0||S.busy||!!st.over;
+  $('#btnOut').querySelector('i').textContent=S.props.out;$('#btnUndo').querySelector('i').textContent=S.props.undo;$('#btnShuf').querySelector('i').textContent=S.props.shuf;
+}
+function newLevel(n){
+  S.st=Sheep.newGame(n);S.props={out:1,undo:1,shuf:1};S.snap=null;S.busy=false;S.modal=null;closeDialog(overlay);
+  board.innerHTML='';S.els=S.st.tiles.map(t=>{const el=document.createElement('div');el.className='tile';el.dataset.id=t.id;el.addEventListener('pointerdown',e=>{e.preventDefault();onTap(t.id);});board.appendChild(el);return el;});
+  $('#lvl').textContent=n;$('#wins').textContent=prog.wins;$('#pill').textContent='第 '+n+' 关 · '+Sheep.params(n).kinds+' 种图案 '+S.st.tiles.length+' 张';
+  layoutMetrics();renderAll();
+}
+function onTap(id){
+  const st=S.st;if(S.busy||st.over||S.modal)return;const t=st.tiles[id];if(t.state!=='board'||!Sheep.isFree(st,t))return;
+  S.snap=Sheep.snapshot(st);
+  const r=Sheep.pick(st,id);if(!r.ok){S.snap=null;return;}
+  S.busy=true;renderAll();
+  setTimeout(()=>{
+    if(r.removed){for(const i of r.removed)S.els[i].classList.add('gone');}
+    S.busy=false;renderAll();
+    if(st.over==='win')win();else if(st.over==='lose')lose();
+  },240);
+}
+function win(){prog.wins++;prog.level=Math.max(prog.level,S.st.level+1);store.set('aigame.sheep.v1',prog);$('#wins').textContent=prog.wins;
+  S.modal=()=>dialog(overlay,{title:'过关!',lines:['第 '+S.st.level+' 关 全部消完','已通关 '+prog.wins+' 次'],buttons:[{label:'下一关',primary:true,onClick(){newLevel(S.st.level+1);}},{label:'再玩本关',onClick(){newLevel(S.st.level);}}]});setTimeout(S.modal,350);}
+function lose(){S.modal=()=>dialog(overlay,{title:'槽满了',lines:['第 '+S.st.level+' 关 · 还剩 '+S.st.tiles.filter(t=>t.state!=='gone').length+' 张',S.props.out>0?'还能用一次"移出"救一下':'道具用完了'],buttons:S.props.out>0?[{label:'用移出',primary:true,onClick(){S.modal=null;useOut();}},{label:'重来',onClick(){newLevel(S.st.level);}}]:[{label:'重来',primary:true,onClick(){newLevel(S.st.level);}},{label:'回第 1 关',onClick(){newLevel(1);}}]});setTimeout(S.modal,350);}
+function useOut(){const st=S.st;if(S.props.out<=0||!st.slot.length||S.busy)return;S.props.out--;S.snap=null;Sheep.moveOut(st);renderAll();}
+function useUndo(){if(S.props.undo<=0||!S.snap||S.busy)return;S.props.undo--;Sheep.restore(S.st,S.snap);S.snap=null;if(S.modal){closeDialog(overlay);S.modal=null;}renderAll();}
+function useShuf(){const st=S.st;if(S.props.shuf<=0||S.busy||st.over)return;S.props.shuf--;S.snap=null;Sheep.shuffle(st);S.els.forEach((el,i)=>{if(st.tiles[i].state==='board'){el.classList.remove('flip');void el.offsetWidth;el.classList.add('flip');}});renderAll();}
+$('#btnOut').addEventListener('click',useOut);$('#btnUndo').addEventListener('click',useUndo);$('#btnShuf').addEventListener('click',useShuf);
+$('#btnRestart').addEventListener('click',()=>newLevel(S.st.level));
+$('#btnHelp').addEventListener('click',()=>{S.modal=null;dialog(overlay,{title:'怎么玩',html:'<div class="txt">点没被压住的牌,它会进到下面的<b>木槽</b>里;槽里凑齐 <b>3 张一样的</b>就消掉。<br>槽只有 7 格,放满还没消掉就输了;把牌全消完过关。<br>两侧横着叠的牌只能从最外面一张开始拿。<br>每关三个道具各一次:<b>移出</b>把槽里前 3 张放回牌面,<b>撤销</b>退回上一步,<b>洗牌</b>重排剩余牌的图案。<br>每一关都保证有解,别急,先看清楚再点。</div>',buttons:[{label:'知道了',primary:true}]});});
+window.addEventListener('resize',()=>{layoutMetrics();renderAll();});
+const dbg=/^#lv(\d+)$/.exec(location.hash); // 调试:#lv5 直接看第 5 关
+newLevel(dbg?Math.max(1,+dbg[1]):Math.min(prog.level,99));
+})();
+</script>
+</body>
+</html>
